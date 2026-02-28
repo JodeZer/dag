@@ -82,16 +82,34 @@ func (d *TypedDAG[T]) GetVertex(id string) (T, error) {
 	return typed, nil
 }
 
-// GetVertices returns all vertices as a map of id to value.
-func (d *TypedDAG[T]) GetVertices() map[string]T {
-	result := make(map[string]T)
-	vertices := d.inner.GetVertices()
-	for id, v := range vertices {
+// convertMap converts map[string]interface{} to map[string]T using type assertion.
+func convertMap[T any](m map[string]interface{}) map[string]T {
+	result := make(map[string]T, len(m))
+	for id, v := range m {
 		if typed, ok := v.(T); ok {
 			result[id] = typed
 		}
 	}
 	return result
+}
+
+// convertMapWithError converts map[string]interface{} to map[string]T using type assertion.
+func convertMapWithError[T any](m map[string]interface{}, err error) (map[string]T, error) {
+	if err != nil {
+		return nil, err
+	}
+	result := make(map[string]T, len(m))
+	for id, v := range m {
+		if typed, ok := v.(T); ok {
+			result[id] = typed
+		}
+	}
+	return result, nil
+}
+
+// GetVertices returns all vertices as a map of id to value.
+func (d *TypedDAG[T]) GetVertices() map[string]T {
+	return convertMap[T](d.inner.GetVertices())
 }
 
 // DeleteVertex deletes the vertex with the given id.
@@ -139,14 +157,7 @@ func (d *TypedDAG[T]) IsEmpty() bool {
 
 // GetLeaves returns all vertices without children.
 func (d *TypedDAG[T]) GetLeaves() map[string]T {
-	leaves := d.inner.GetLeaves()
-	result := make(map[string]T)
-	for id, v := range leaves {
-		if typed, ok := v.(T); ok {
-			result[id] = typed
-		}
-	}
-	return result
+	return convertMap[T](d.inner.GetLeaves())
 }
 
 // IsLeaf returns true if the vertex with the given id has no children.
@@ -157,14 +168,7 @@ func (d *TypedDAG[T]) IsLeaf(id string) (bool, error) {
 
 // GetRoots returns all vertices without parents.
 func (d *TypedDAG[T]) GetRoots() map[string]T {
-	roots := d.inner.GetRoots()
-	result := make(map[string]T)
-	for id, v := range roots {
-		if typed, ok := v.(T); ok {
-			result[id] = typed
-		}
-	}
-	return result
+	return convertMap[T](d.inner.GetRoots())
 }
 
 // IsRoot returns true if the vertex with the given id has no parents.
@@ -176,49 +180,19 @@ func (d *TypedDAG[T]) IsRoot(id string) (bool, error) {
 // GetParents returns all parents of the vertex with the id.
 // GetParents returns an error if id is empty or unknown.
 func (d *TypedDAG[T]) GetParents(id string) (map[string]T, error) {
-	parents, err := d.inner.GetParents(id)
-	if err != nil {
-		return nil, err
-	}
-	result := make(map[string]T)
-	for id, v := range parents {
-		if typed, ok := v.(T); ok {
-			result[id] = typed
-		}
-	}
-	return result, nil
+	return convertMapWithError[T](d.inner.GetParents(id))
 }
 
 // GetChildren returns all children of the vertex with the id.
 // GetChildren returns an error if id is empty or unknown.
 func (d *TypedDAG[T]) GetChildren(id string) (map[string]T, error) {
-	children, err := d.inner.GetChildren(id)
-	if err != nil {
-		return nil, err
-	}
-	result := make(map[string]T)
-	for id, v := range children {
-		if typed, ok := v.(T); ok {
-			result[id] = typed
-		}
-	}
-	return result, nil
+	return convertMapWithError[T](d.inner.GetChildren(id))
 }
 
 // GetAncestors returns all ancestors of the vertex with the id.
 // GetAncestors returns an error if id is empty or unknown.
 func (d *TypedDAG[T]) GetAncestors(id string) (map[string]T, error) {
-	ancestors, err := d.inner.GetAncestors(id)
-	if err != nil {
-		return nil, err
-	}
-	result := make(map[string]T)
-	for id, v := range ancestors {
-		if typed, ok := v.(T); ok {
-			result[id] = typed
-		}
-	}
-	return result, nil
+	return convertMapWithError[T](d.inner.GetAncestors(id))
 }
 
 // GetOrderedAncestors returns all ancestors of the vertex with id
@@ -231,17 +205,7 @@ func (d *TypedDAG[T]) GetOrderedAncestors(id string) ([]string, error) {
 // GetDescendants returns all descendants of the vertex with the id.
 // GetDescendants returns an error if id is empty or unknown.
 func (d *TypedDAG[T]) GetDescendants(id string) (map[string]T, error) {
-	descendants, err := d.inner.GetDescendants(id)
-	if err != nil {
-		return nil, err
-	}
-	result := make(map[string]T)
-	for id, v := range descendants {
-		if typed, ok := v.(T); ok {
-			result[id] = typed
-		}
-	}
-	return result, nil
+	return convertMapWithError[T](d.inner.GetDescendants(id))
 }
 
 // GetOrderedDescendants returns all descendants of the vertex with id

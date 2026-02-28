@@ -64,9 +64,18 @@ func TestTypedDAGMarshalJSON(t *testing.T) {
 	}
 
 	dag := New[Person]()
-	_ = dag.AddVertexByID("p1", Person{Name: "Alice", Age: 30})
-	_ = dag.AddVertexByID("p2", Person{Name: "Bob", Age: 25})
-	_ = dag.AddEdge("p1", "p2")
+	err := dag.AddVertexByID("p1", Person{Name: "Alice", Age: 30})
+	if err != nil {
+		t.Fatalf("AddVertexByID failed: %v", err)
+	}
+	err = dag.AddVertexByID("p2", Person{Name: "Bob", Age: 25})
+	if err != nil {
+		t.Fatalf("AddVertexByID failed: %v", err)
+	}
+	err = dag.AddEdge("p1", "p2")
+	if err != nil {
+		t.Fatalf("AddEdge failed: %v", err)
+	}
 
 	// Auto-infer serialization - no generic parameter needed
 	data, err := dag.MarshalJSON()
@@ -133,11 +142,26 @@ func TestTypedDAGMarshalUnmarshalRoundtrip(t *testing.T) {
 
 	// Create original DAG
 	original := New[Person]()
-	_ = original.AddVertexByID("p1", Person{Name: "Alice", Age: 30})
-	_ = original.AddVertexByID("p2", Person{Name: "Bob", Age: 25})
-	_ = original.AddVertexByID("p3", Person{Name: "Charlie", Age: 35})
-	_ = original.AddEdge("p1", "p2")
-	_ = original.AddEdge("p2", "p3")
+	err := original.AddVertexByID("p1", Person{Name: "Alice", Age: 30})
+	if err != nil {
+		t.Fatalf("AddVertexByID failed: %v", err)
+	}
+	err = original.AddVertexByID("p2", Person{Name: "Bob", Age: 25})
+	if err != nil {
+		t.Fatalf("AddVertexByID failed: %v", err)
+	}
+	err = original.AddVertexByID("p3", Person{Name: "Charlie", Age: 35})
+	if err != nil {
+		t.Fatalf("AddVertexByID failed: %v", err)
+	}
+	err = original.AddEdge("p1", "p2")
+	if err != nil {
+		t.Fatalf("AddEdge failed: %v", err)
+	}
+	err = original.AddEdge("p2", "p3")
+	if err != nil {
+		t.Fatalf("AddEdge failed: %v", err)
+	}
 
 	// Serialize
 	data, err := original.MarshalJSON()
@@ -183,9 +207,18 @@ func TestTypedDAGMarshalUnmarshalRoundtrip(t *testing.T) {
 func TestTypedDAGWithSimpleTypes(t *testing.T) {
 	// Test with string type
 	dag := New[string]()
-	_ = dag.AddVertexByID("v1", "value1")
-	_ = dag.AddVertexByID("v2", "value2")
-	_ = dag.AddEdge("v1", "v2")
+	err := dag.AddVertexByID("v1", "value1")
+	if err != nil {
+		t.Fatalf("AddVertexByID failed: %v", err)
+	}
+	err = dag.AddVertexByID("v2", "value2")
+	if err != nil {
+		t.Fatalf("AddVertexByID failed: %v", err)
+	}
+	err = dag.AddEdge("v1", "v2")
+	if err != nil {
+		t.Fatalf("AddEdge failed: %v", err)
+	}
 
 	v, err := dag.GetVertex("v1")
 	if err != nil {
@@ -197,9 +230,18 @@ func TestTypedDAGWithSimpleTypes(t *testing.T) {
 
 	// Test with int type
 	dag2 := New[int]()
-	_ = dag2.AddVertexByID("n1", 42)
-	_ = dag2.AddVertexByID("n2", 100)
-	_ = dag2.AddEdge("n1", "n2")
+	err = dag2.AddVertexByID("n1", 42)
+	if err != nil {
+		t.Fatalf("AddVertexByID failed: %v", err)
+	}
+	err = dag2.AddVertexByID("n2", 100)
+	if err != nil {
+		t.Fatalf("AddVertexByID failed: %v", err)
+	}
+	err = dag2.AddEdge("n1", "n2")
+	if err != nil {
+		t.Fatalf("AddEdge failed: %v", err)
+	}
 
 	n, err := dag2.GetVertex("n1")
 	if err != nil {
@@ -221,9 +263,18 @@ func TestTypedDAGWithPointerType(t *testing.T) {
 	alice := &Person{Name: "Alice", Age: 30}
 	bob := &Person{Name: "Bob", Age: 25}
 
-	_ = dag.AddVertexByID("p1", alice)
-	_ = dag.AddVertexByID("p2", bob)
-	_ = dag.AddEdge("p1", "p2")
+	err := dag.AddVertexByID("p1", alice)
+	if err != nil {
+		t.Fatalf("AddVertexByID failed: %v", err)
+	}
+	err = dag.AddVertexByID("p2", bob)
+	if err != nil {
+		t.Fatalf("AddVertexByID failed: %v", err)
+	}
+	err = dag.AddEdge("p1", "p2")
+	if err != nil {
+		t.Fatalf("AddEdge failed: %v", err)
+	}
 
 	// Type-safe vertex access
 	p, err := dag.GetVertex("p1")
@@ -242,11 +293,26 @@ func TestTypedDAGGetLeaves(t *testing.T) {
 	}
 
 	dag := New[Task]()
-	_ = dag.AddVertexByID("t1", Task{Name: "Task 1"})
-	_ = dag.AddVertexByID("t2", Task{Name: "Task 2"})
-	_ = dag.AddVertexByID("t3", Task{Name: "Task 3"})
-	_ = dag.AddEdge("t1", "t2")
-	_ = dag.AddEdge("t1", "t3")
+	err := dag.AddVertexByID("t1", Task{Name: "Task 1"})
+	if err != nil {
+		t.Fatalf("AddVertexByID failed: %v", err)
+	}
+	err = dag.AddVertexByID("t2", Task{Name: "Task 2"})
+	if err != nil {
+		t.Fatalf("AddVertexByID failed: %v", err)
+	}
+	err = dag.AddVertexByID("t3", Task{Name: "Task 3"})
+	if err != nil {
+		t.Fatalf("AddVertexByID failed: %v", err)
+	}
+	err = dag.AddEdge("t1", "t2")
+	if err != nil {
+		t.Fatalf("AddEdge failed: %v", err)
+	}
+	err = dag.AddEdge("t1", "t3")
+	if err != nil {
+		t.Fatalf("AddEdge failed: %v", err)
+	}
 
 	leaves := dag.GetLeaves()
 	if len(leaves) != 2 {
@@ -268,11 +334,26 @@ func TestTypedDAGGetRoots(t *testing.T) {
 	}
 
 	dag := New[Task]()
-	_ = dag.AddVertexByID("t1", Task{Name: "Task 1"})
-	_ = dag.AddVertexByID("t2", Task{Name: "Task 2"})
-	_ = dag.AddVertexByID("t3", Task{Name: "Task 3"})
-	_ = dag.AddEdge("t1", "t2")
-	_ = dag.AddEdge("t2", "t3")
+	err := dag.AddVertexByID("t1", Task{Name: "Task 1"})
+	if err != nil {
+		t.Fatalf("AddVertexByID failed: %v", err)
+	}
+	err = dag.AddVertexByID("t2", Task{Name: "Task 2"})
+	if err != nil {
+		t.Fatalf("AddVertexByID failed: %v", err)
+	}
+	err = dag.AddVertexByID("t3", Task{Name: "Task 3"})
+	if err != nil {
+		t.Fatalf("AddVertexByID failed: %v", err)
+	}
+	err = dag.AddEdge("t1", "t2")
+	if err != nil {
+		t.Fatalf("AddEdge failed: %v", err)
+	}
+	err = dag.AddEdge("t2", "t3")
+	if err != nil {
+		t.Fatalf("AddEdge failed: %v", err)
+	}
 
 	roots := dag.GetRoots()
 	if len(roots) != 1 {
@@ -294,11 +375,26 @@ func TestTypedDAGGetChildren(t *testing.T) {
 	}
 
 	dag := New[Task]()
-	_ = dag.AddVertexByID("t1", Task{Name: "Task 1"})
-	_ = dag.AddVertexByID("t2", Task{Name: "Task 2"})
-	_ = dag.AddVertexByID("t3", Task{Name: "Task 3"})
-	_ = dag.AddEdge("t1", "t2")
-	_ = dag.AddEdge("t1", "t3")
+	err := dag.AddVertexByID("t1", Task{Name: "Task 1"})
+	if err != nil {
+		t.Fatalf("AddVertexByID failed: %v", err)
+	}
+	err = dag.AddVertexByID("t2", Task{Name: "Task 2"})
+	if err != nil {
+		t.Fatalf("AddVertexByID failed: %v", err)
+	}
+	err = dag.AddVertexByID("t3", Task{Name: "Task 3"})
+	if err != nil {
+		t.Fatalf("AddVertexByID failed: %v", err)
+	}
+	err = dag.AddEdge("t1", "t2")
+	if err != nil {
+		t.Fatalf("AddEdge failed: %v", err)
+	}
+	err = dag.AddEdge("t1", "t3")
+	if err != nil {
+		t.Fatalf("AddEdge failed: %v", err)
+	}
 
 	children, err := dag.GetChildren("t1")
 	if err != nil {
@@ -327,11 +423,26 @@ func TestTypedDAGGetParents(t *testing.T) {
 	}
 
 	dag := New[Task]()
-	_ = dag.AddVertexByID("t1", Task{Name: "Task 1"})
-	_ = dag.AddVertexByID("t2", Task{Name: "Task 2"})
-	_ = dag.AddVertexByID("t3", Task{Name: "Task 3"})
-	_ = dag.AddEdge("t1", "t3")
-	_ = dag.AddEdge("t2", "t3")
+	err := dag.AddVertexByID("t1", Task{Name: "Task 1"})
+	if err != nil {
+		t.Fatalf("AddVertexByID failed: %v", err)
+	}
+	err = dag.AddVertexByID("t2", Task{Name: "Task 2"})
+	if err != nil {
+		t.Fatalf("AddVertexByID failed: %v", err)
+	}
+	err = dag.AddVertexByID("t3", Task{Name: "Task 3"})
+	if err != nil {
+		t.Fatalf("AddVertexByID failed: %v", err)
+	}
+	err = dag.AddEdge("t1", "t3")
+	if err != nil {
+		t.Fatalf("AddEdge failed: %v", err)
+	}
+	err = dag.AddEdge("t2", "t3")
+	if err != nil {
+		t.Fatalf("AddEdge failed: %v", err)
+	}
 
 	parents, err := dag.GetParents("t3")
 	if err != nil {
@@ -360,11 +471,26 @@ func TestTypedDAGGetDescendantsGraph(t *testing.T) {
 	}
 
 	dag := New[Task]()
-	_ = dag.AddVertexByID("t1", Task{Name: "Task 1"})
-	_ = dag.AddVertexByID("t2", Task{Name: "Task 2"})
-	_ = dag.AddVertexByID("t3", Task{Name: "Task 3"})
-	_ = dag.AddEdge("t1", "t2")
-	_ = dag.AddEdge("t2", "t3")
+	err := dag.AddVertexByID("t1", Task{Name: "Task 1"})
+	if err != nil {
+		t.Fatalf("AddVertexByID failed: %v", err)
+	}
+	err = dag.AddVertexByID("t2", Task{Name: "Task 2"})
+	if err != nil {
+		t.Fatalf("AddVertexByID failed: %v", err)
+	}
+	err = dag.AddVertexByID("t3", Task{Name: "Task 3"})
+	if err != nil {
+		t.Fatalf("AddVertexByID failed: %v", err)
+	}
+	err = dag.AddEdge("t1", "t2")
+	if err != nil {
+		t.Fatalf("AddEdge failed: %v", err)
+	}
+	err = dag.AddEdge("t2", "t3")
+	if err != nil {
+		t.Fatalf("AddEdge failed: %v", err)
+	}
 
 	subgraph, rootID, err := dag.GetDescendantsGraph("t1")
 	if err != nil {
@@ -396,11 +522,26 @@ func TestTypedDAGGetAncestorsGraph(t *testing.T) {
 	}
 
 	dag := New[Task]()
-	_ = dag.AddVertexByID("t1", Task{Name: "Task 1"})
-	_ = dag.AddVertexByID("t2", Task{Name: "Task 2"})
-	_ = dag.AddVertexByID("t3", Task{Name: "Task 3"})
-	_ = dag.AddEdge("t1", "t2")
-	_ = dag.AddEdge("t2", "t3")
+	err := dag.AddVertexByID("t1", Task{Name: "Task 1"})
+	if err != nil {
+		t.Fatalf("AddVertexByID failed: %v", err)
+	}
+	err = dag.AddVertexByID("t2", Task{Name: "Task 2"})
+	if err != nil {
+		t.Fatalf("AddVertexByID failed: %v", err)
+	}
+	err = dag.AddVertexByID("t3", Task{Name: "Task 3"})
+	if err != nil {
+		t.Fatalf("AddVertexByID failed: %v", err)
+	}
+	err = dag.AddEdge("t1", "t2")
+	if err != nil {
+		t.Fatalf("AddEdge failed: %v", err)
+	}
+	err = dag.AddEdge("t2", "t3")
+	if err != nil {
+		t.Fatalf("AddEdge failed: %v", err)
+	}
 
 	subgraph, leafID, err := dag.GetAncestorsGraph("t3")
 	if err != nil {
@@ -433,9 +574,18 @@ func TestTypedDAGCopy(t *testing.T) {
 	}
 
 	original := New[Person]()
-	_ = original.AddVertexByID("p1", Person{Name: "Alice", Age: 30})
-	_ = original.AddVertexByID("p2", Person{Name: "Bob", Age: 25})
-	_ = original.AddEdge("p1", "p2")
+	err := original.AddVertexByID("p1", Person{Name: "Alice", Age: 30})
+	if err != nil {
+		t.Fatalf("AddVertexByID failed: %v", err)
+	}
+	err = original.AddVertexByID("p2", Person{Name: "Bob", Age: 25})
+	if err != nil {
+		t.Fatalf("AddVertexByID failed: %v", err)
+	}
+	err = original.AddEdge("p1", "p2")
+	if err != nil {
+		t.Fatalf("AddEdge failed: %v", err)
+	}
 
 	copy, err := original.Copy()
 	if err != nil {
@@ -545,9 +695,18 @@ func TestTypedDAGIsEmpty(t *testing.T) {
 func TestTypedDAGSimpleRoundtrip(t *testing.T) {
 	// Create and serialize
 	original := New[string]()
-	_ = original.AddVertexByID("a", "A")
-	_ = original.AddVertexByID("b", "B")
-	_ = original.AddEdge("a", "b")
+	err := original.AddVertexByID("a", "A")
+	if err != nil {
+		t.Fatalf("AddVertexByID failed: %v", err)
+	}
+	err = original.AddVertexByID("b", "B")
+	if err != nil {
+		t.Fatalf("AddVertexByID failed: %v", err)
+	}
+	err = original.AddEdge("a", "b")
+	if err != nil {
+		t.Fatalf("AddEdge failed: %v", err)
+	}
 
 	data, err := original.MarshalJSON()
 	if err != nil {
@@ -566,5 +725,166 @@ func TestTypedDAGSimpleRoundtrip(t *testing.T) {
 	}
 	if a != "A" {
 		t.Errorf("Expected 'A', got '%s'", a)
+	}
+}
+
+// TestTypedDAGCompatibilityWithDAG tests interoperability between TypedDAG and DAG
+func TestTypedDAGCompatibilityWithDAG(t *testing.T) {
+	type Task struct {
+		Name string
+	}
+
+	// Create a TypedDAG
+	typed := New[Task]()
+	err := typed.AddVertexByID("t1", Task{Name: "Task 1"})
+	if err != nil {
+		t.Fatalf("AddVertexByID failed: %v", err)
+	}
+	err = typed.AddVertexByID("t2", Task{Name: "Task 2"})
+	if err != nil {
+		t.Fatalf("AddVertexByID failed: %v", err)
+	}
+	err = typed.AddEdge("t1", "t2")
+	if err != nil {
+		t.Fatalf("AddEdge failed: %v", err)
+	}
+
+	// Convert to DAG using ToDAG()
+	dag := typed.ToDAG()
+
+	// Verify the underlying DAG has the same structure
+	if dag.GetOrder() != 2 {
+		t.Errorf("DAG order mismatch: got %d, want 2", dag.GetOrder())
+	}
+	if dag.GetSize() != 1 {
+		t.Errorf("DAG size mismatch: got %d, want 1", dag.GetSize())
+	}
+
+	// Verify vertices exist
+	v, err := dag.GetVertex("t1")
+	if err != nil {
+		t.Fatalf("GetVertex failed: %v", err)
+	}
+	task, ok := v.(Task)
+	if !ok {
+		t.Fatal("Vertex is not of type Task")
+	}
+	if task.Name != "Task 1" {
+		t.Errorf("Task name mismatch: got '%s', want 'Task 1'", task.Name)
+	}
+
+	// Verify edge exists
+	isEdge, _ := dag.IsEdge("t1", "t2")
+	if !isEdge {
+		t.Error("Expected edge t1 -> t2 to exist")
+	}
+}
+
+// TestTypedDAGUnmarshalFromDAGMarshal tests that data marshaled from DAG
+// can be unmarshaled by TypedDAG
+func TestTypedDAGUnmarshalFromDAGMarshal(t *testing.T) {
+	type Person struct {
+		Name string `json:"name"`
+		Age  int    `json:"age"`
+	}
+
+	// Create a regular DAG
+	dag := NewDAG()
+	err := dag.AddVertexByID("p1", Person{Name: "Alice", Age: 30})
+	if err != nil {
+		t.Fatalf("AddVertexByID failed: %v", err)
+	}
+	err = dag.AddVertexByID("p2", Person{Name: "Bob", Age: 25})
+	if err != nil {
+		t.Fatalf("AddVertexByID failed: %v", err)
+	}
+	err = dag.AddEdge("p1", "p2")
+	if err != nil {
+		t.Fatalf("AddEdge failed: %v", err)
+	}
+
+	// Marshal using regular DAG Marshal
+	data, err := dag.MarshalJSON()
+	if err != nil {
+		t.Fatalf("MarshalJSON failed: %v", err)
+	}
+
+	// Unmarshal using TypedDAG UnmarshalJSON
+	typed, err := UnmarshalJSON[Person](data, defaultOptions())
+	if err != nil {
+		t.Fatalf("UnmarshalJSON failed: %v", err)
+	}
+
+	// Verify data
+	alice, err := typed.GetVertex("p1")
+	if err != nil {
+		t.Fatalf("GetVertex failed: %v", err)
+	}
+	if alice.Name != "Alice" || alice.Age != 30 {
+		t.Errorf("Person data mismatch: got %+v, want {Name:Alice, Age:30}", alice)
+	}
+
+	// Verify edge
+	isEdge, _ := typed.IsEdge("p1", "p2")
+	if !isEdge {
+		t.Error("Expected edge p1 -> p2 to exist")
+	}
+}
+
+// TestTypedDAGMarshalToDAGUnmarshal tests that data marshaled from TypedDAG
+// can be unmarshaled by DAG (using the internal unmarshal functionality)
+func TestTypedDAGMarshalToDAGUnmarshal(t *testing.T) {
+	type Person struct {
+		Name string `json:"name"`
+		Age  int    `json:"age"`
+	}
+
+	// Create a TypedDAG
+	typed := New[Person]()
+	err := typed.AddVertexByID("p1", Person{Name: "Alice", Age: 30})
+	if err != nil {
+		t.Fatalf("AddVertexByID failed: %v", err)
+	}
+	err = typed.AddVertexByID("p2", Person{Name: "Bob", Age: 25})
+	if err != nil {
+		t.Fatalf("AddVertexByID failed: %v", err)
+	}
+	err = typed.AddEdge("p1", "p2")
+	if err != nil {
+		t.Fatalf("AddEdge failed: %v", err)
+	}
+
+	// Marshal using TypedDAG MarshalJSON
+	data, err := typed.MarshalJSON()
+	if err != nil {
+		t.Fatalf("MarshalJSON failed: %v", err)
+	}
+
+	// Unmarshal using TypedDAG UnmarshalJSON and convert to DAG
+	typed2, err := UnmarshalJSON[Person](data, defaultOptions())
+	if err != nil {
+		t.Fatalf("UnmarshalJSON failed: %v", err)
+	}
+
+	// Convert to DAG using ToDAG()
+	dag := typed2.ToDAG()
+
+	// Verify data
+	v, err := dag.GetVertex("p1")
+	if err != nil {
+		t.Fatalf("GetVertex failed: %v", err)
+	}
+	person, ok := v.(Person)
+	if !ok {
+		t.Fatal("Vertex is not of type Person")
+	}
+	if person.Name != "Alice" || person.Age != 30 {
+		t.Errorf("Person data mismatch: got %+v, want {Name:Alice, Age:30}", person)
+	}
+
+	// Verify edge
+	isEdge, _ := dag.IsEdge("p1", "p2")
+	if !isEdge {
+		t.Error("Expected edge p1 -> p2 to exist")
 	}
 }
