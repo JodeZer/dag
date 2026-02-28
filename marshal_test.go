@@ -251,7 +251,7 @@ func TestGenericMarshalUnmarshalJSONSimple(t *testing.T) {
 	}
 
 	// Unmarshal using generic API
-	restored, err := UnmarshalJSON[string](data, defaultOptions())
+	restored, err := UnmarshalJSONGeneric[string](data, defaultOptions())
 	if err != nil {
 		t.Fatalf("UnmarshalJSON failed: %v", err)
 	}
@@ -296,7 +296,7 @@ func TestGenericMarshalUnmarshalJSONComplex(t *testing.T) {
 	}
 
 	// Unmarshal using generic API
-	restored, err := UnmarshalJSON[Person](data, defaultOptions())
+	restored, err := UnmarshalJSONGeneric[Person](data, defaultOptions())
 	if err != nil {
 		t.Fatalf("UnmarshalJSON failed: %v", err)
 	}
@@ -323,7 +323,7 @@ func TestGenericMarshalUnmarshalJSONComplex(t *testing.T) {
 func TestUnmarshalJSONSimple(t *testing.T) {
 	data := []byte(`{"vs":[{"i":"v1","v":"value1"},{"i":"v2","v":"value2"}],"es":[{"s":"v1","d":"v2"}]}`)
 
-	dag, err := UnmarshalJSON[string](data, defaultOptions())
+	dag, err := UnmarshalJSONGeneric[string](data, defaultOptions())
 	if err != nil {
 		t.Fatalf("UnmarshalJSON failed: %v", err)
 	}
@@ -372,7 +372,7 @@ func TestUnmarshalJSONComplex(t *testing.T) {
 
 	data := []byte(`{"vs":[{"i":"p1","v":{"name":"Alice","age":30}},{"i":"p2","v":{"name":"Bob","age":25}}],"es":[{"s":"p1","d":"p2"}]}`)
 
-	dag, err := UnmarshalJSON[Person](data, defaultOptions())
+	dag, err := UnmarshalJSONGeneric[Person](data, defaultOptions())
 	if err != nil {
 		t.Fatalf("UnmarshalJSON failed: %v", err)
 	}
@@ -413,7 +413,7 @@ func TestUnmarshalJSONComplex(t *testing.T) {
 func TestUnmarshalJSONInteger(t *testing.T) {
 	data := []byte(`{"vs":[{"i":"n1","v":42},{"i":"n2","v":100}],"es":[{"s":"n1","d":"n2"}]}`)
 
-	dag, err := UnmarshalJSON[int](data, defaultOptions())
+	dag, err := UnmarshalJSONGeneric[int](data, defaultOptions())
 	if err != nil {
 		t.Fatalf("UnmarshalJSON failed: %v", err)
 	}
@@ -452,8 +452,8 @@ func TestUnmarshalJSONCompatibility(t *testing.T) {
 		t.Fatalf("MarshalJSON failed: %v", err)
 	}
 
-	// Unmarshal using new generic UnmarshalJSON
-	dag1, err := UnmarshalJSON[string](data, defaultOptions())
+	// Unmarshal using new generic UnmarshalJSONGeneric
+	dag1, err := UnmarshalJSONGeneric[string](data, defaultOptions())
 	if err != nil {
 		t.Fatalf("UnmarshalJSON failed: %v", err)
 	}

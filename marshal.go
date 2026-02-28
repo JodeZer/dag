@@ -41,27 +41,29 @@ func (d *DAG) UnmarshalJSON(_ []byte) error {
 	return errors.New("this method is not supported, request function UnmarshalJSON instead")
 }
 
-// UnmarshalJSON parses JSON-encoded data and returns a new DAG.
-// This is the recommended function for unmarshaling DAGs from JSON.
+// UnmarshalJSONGeneric parses JSON-encoded data and returns a new DAG.
+// This is the legacy generic function kept for backward compatibility.
 //
 // The generic parameter T specifies the type of vertex values. It can be any type
 // that json.Unmarshal can handle, including complex nested structs.
 //
+// For new code, consider using the TypedDAG[T] API with UnmarshalJSON[T] instead.
+//
 // Example usage:
 //
 //   // Simple type
-//   dag, err := dag.UnmarshalJSON[string](data, opts)
+//   dag, err := dag.UnmarshalJSONGeneric[string](data, opts)
 //
 //   // Complex custom type
 //   type Person struct {
 //       Name string `json:"name"`
 //       Age  int    `json:"age"`
 //   }
-//   dag, err := dag.UnmarshalJSON[Person](data, opts)
+//   dag, err := dag.UnmarshalJSONGeneric[Person](data, opts)
 //
 //   // Pointer to struct type
-//   dag, err := dag.UnmarshalJSON[*Person](data, opts)
-func UnmarshalJSON[T any](data []byte, options Options) (*DAG, error) {
+//   dag, err := dag.UnmarshalJSONGeneric[*Person](data, opts)
+func UnmarshalJSONGeneric[T any](data []byte, options Options) (*DAG, error) {
 	var sd storableDAGGeneric[T]
 	if err := json.Unmarshal(data, &sd); err != nil {
 		return nil, err
@@ -74,19 +76,12 @@ func UnmarshalJSON[T any](data []byte, options Options) (*DAG, error) {
 		dag.Options(options)
 	}
 
-	// Directly add vertices without interface conversion - this is the key optimization
-	// Using VerticesGeneric() avoids the Vertexer interface boxing
+	// Batch add vertices - direct access to avoid interface boxing
 	dag.muDAG.Lock()
 	for _, v := range sd.VerticesGeneric() {
-		// Directly access the generic vertex data
 		id := v.WrappedID
 		value := v.Value
 
-		// Sanity check - we can't check for nil on generic types directly
-		// Instead, we rely on the fact that DAG doesn't allow nil values
-		// If the JSON contains null for a value, json.Unmarshal will handle it
-
-		// Calculate hash
 		vHash := dag.hashVertex(value)
 
 		// Check for duplicate vertex
@@ -106,9 +101,9 @@ func UnmarshalJSON[T any](data []byte, options Options) (*DAG, error) {
 	}
 	dag.muDAG.Unlock()
 
-	// Add edges using the standard AddEdge method
-	for _, e := range sd.StorableEdges {
-		if err := dag.AddEdge(e.SrcID, e.DstID); err != nil {
+	// Batch add edges using optimized method
+	if len(sd.StorableEdges) > 0 {
+		if err := dag.addEdgesBatch(sd.StorableEdges); err != nil {
 			return nil, err
 		}
 	}
