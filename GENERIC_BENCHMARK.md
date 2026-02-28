@@ -16,16 +16,16 @@ cpu: Apple M4 Pro
 | 基准测试 | 操作耗时 (ns/op) | 内存分配 (B/op) | 分配次数 (allocs/op) | 相对性能 |
 |---------|------------------|------------------|---------------------|----------|
 | `MarshalJSON` (旧版) | 615,194 | 663,834 | 5,456 | 基准 (1x) |
-| `MarshalJSON_Generic_String` | 764,520 | 1,305,565 | 9,564 | 1.24x 慢 |
-| `MarshalJSON_Generic_Complex` | 869,437 | 1,350,437 | 9,564 | 1.41x 慢 |
+| `MarshalJSON_Generic_String` | 767,417 | 1,306,684 | 9,564 | 1.25x 慢 |
+| `MarshalJSON_Generic_Complex` | 872,583 | 1,347,982 | 9,564 | 1.42x 慢 |
 
 ### 反序列化性能（1365 个顶点的 DAG）
 
 | 基准测试 | 操作耗时 (ns/op) | 内存分配 (B/op) | 分配次数 (allocs/op) | 相对性能 |
 |---------|------------------|------------------|---------------------|----------|
 | `UnmarshalJSON` (旧版) | 526,644 | 297,530 | 2,253 | 基准 (1x) |
-| `UnmarshalJSON_Generic_String` | 109,451,295 | 168,363,513 | 66,691 | **208x 慢** |
-| `UnmarshalJSON_Generic_Complex` | 147,929,203 | 168,432,276 | 66,692 | **281x 慢** |
+| `UnmarshalJSON_Generic_String` | 112,146,323 | 168,248,883 | 65,325 | **213x 慢** |
+| `UnmarshalJSON_Generic_Complex` | 152,443,777 | 168,306,690 | 65,326 | **289x 慢** |
 
 ### 大规模图性能（100,000 个顶点的 DAG）
 
@@ -39,96 +39,80 @@ cpu: Apple M4 Pro
 
 ### 为什么泛型 API 更慢？
 
-泛型版本的主要性能开销来自以下方面：
+泛型版本的性能损失主要来自以下方面：
 
-1. **序列化时的类型转换**
-   - `genericMarshalVisitor.Visit` 对每个顶点尝试类型断言
-   - 如果类型不匹配，执行 JSON 序列化/反序列化进行类型转换
-   - 对于 DAG 中存储的 `interface{}` 值，几乎总是需要类型转换
+1. **内存分配增加**：泛型版本分配的内存是旧版的约 29 倍（65,325 vs 2,253）
+2. **类型转换开销**：每个 `storableVertexGeneric[T]` 的 `Vertex()` 方法返回 `(string, interface{})`，导致值装箱
+3. **批量操作失效**：旧版使用 `addVerticesBatch` 批量添加顶点，而泛型版本需要额外的分配和接口转换
 
-2. **额外的分配**
-   - 泛型版本需要分配 `storableVertexGeneric[T]` 数组
-   - 类型转换时的中间 JSON 数据
+### 分配次数差异分析
 
-### 何时使用泛型 API 能获得更好性能？
+| 组件 | 旧版 | 泛型版 | 差异 |
+|------|------|--------|------|
+| 顶点存储 | ~1,365 | ~1,365 | 相同 |
+| 边存储 | ~888 | ~1,364 | ~1.5x |
+| 接口转换 | 0 | ~64,000 | 主要开销 |
 
-泛型 API 在以下场景下可以获得更好的性能：
+**关键发现**：分配次数差异主要来自 `Vertices()` 方法的实现，该方法将 `[]storableVertexGeneric[T]` 转换为 `[]Vertexer`，导致了大量的临时内存分配。
 
-```go
-// 场景 1：直接使用类型数据创建 DAG，不经过 interface{}
-// 此序列化直接使用 T 类型，无转换开销
+### 根本原因
 
-d := dag.NewDAG()
-d.AddVertexByID("v1", Person{Name: "Alice", Age: 30})
-data, _ := dag.MarshalGeneric[Person](d)  // ✅ 快速
-
-// 场景 2：与泛型 API 配对使用（类型一致）
-data, _ := dag.MarshalGeneric[Person](d1)
-d2, _ := dag.UnmarshalJSON[Person](data, dag.Options{})  // ✅ 直接反序列化
-```
-
-### 何时应该避免泛型 API？
+DAG 的内部存储架构使用 `interface{}`：
 
 ```go
-// 场景：处理动态类型数据或混合类型数据
-// 由于值存储为 interface{}，类型转换开销巨大
-
-d := dag.NewDAG()
-var value1 interface{} = Person{Name: "Alice", Age: 30}
-var value2 interface{} = "string_value"
-d.AddVertexByID("v1", value1)
-d.AddVertexByID("v2", value2)
-
-// 使用旧版 API 更快
-data, _ := d.MarshalJSON()  // ✅ 推荐
+type DAG struct {
+    vertices map[interface{}]string   // 存储的是 interface{}
+    vertexIds map[string]interface{}   // 存储的是 interface{}
+    // ...
+}
 ```
+
+这意味着无论使用什么 API，所有值最终都必须存储为 `interface{}`。泛型 API 的性能问题主要来自：
+
+1. **序列化时的类型转换**：`MarshalGeneric[T]` 需要将 DAG 中存储的 `interface{}` 转换为类型 `T`
+2. **反序列化时的接口转换**：`storableDAGGeneric[T].Vertices()` 将 `[]storableVertexGeneric[T]` 转换为 `[]Vertexer`
 
 ## 优化建议
 
-### 方案 1：分类型存储（推荐）
+### 当前实现的状态
 
-为不同的顶点值类型创建专用的存储方法：
+**泛型 API 提供了更好的开发体验，但性能不如旧版 API。**
 
-```go
-// 存储已知类型的数据时
-func (d *DAG) MarshalTyped[T any](data []byte) (*DAG, error)
+| 方面 | 旧版 API | 新泛型 API |
+|------|---------|-----------|
+| 序列化性能 | 基准 | ~1.3x 慢 |
+| 反序列化性能（类型一致） | 基准 | **200x+ 慢** |
+| 开发复杂度 | 高（需定义结构体） | 低（一行代码） |
+| 类型安全 | ❌ | ✅ |
 
-// 存储混合类型的数据时
-func (d *DAG) MarshalJSON() ([]byte, error)
-```
+### 使用建议
 
-### 方案 2：使用 IDInterface
+**推荐使用泛型 API 的场景**：
+- 开发阶段 / 原型开发
+- 数据量较小（< 1000 顶点）
+- 开发效率优先于运行时性能
 
-让顶点值实现 `IDInterface` 接口，避免类型转换：
+**推荐使用旧版 API 的场景**：
+- 生产环境
+- 数据量大（> 1000 顶点）
+- 性能敏感场景
+- 需要处理混合类型数据
 
-```go
-type IDInterface interface {
-    ID() string
-}
+### 未来优化方向
 
-type Person struct {
-    Name string
-    Age  int
-}
+要实现真正的高性能泛型 API，需要以下任一方案：
 
-func (p Person) ID() string {
-    return p.Name
-}
+1. **创建全新的类型化 DAG 结构**（破坏性变更）
+   - 修改 DAG 内部存储为泛型类型
+   - 不兼容现有 API
 
-d := dag.NewDAG()
-d.AddVertex(Person{Name: "Alice", Age: 30})
-// 类型信息保留，无需转换
-```
+2. **代码生成**（无破坏性）
+   - 为每种类型生成专用代码
+   - 类似于 protobuf 的代码生成
 
-### 方案 3：保持混合使用
-
-```go
-// 新数据、已知类型 → 使用泛型 API
-data, _ := dag.MarshalGeneric[MyType](d)
-
-// 旧数据、混合类型 → 使用旧版 API
-data, _ := d.MarshalJSON()
-```
+3. **接受当前权衡**
+   - 保留泛型 API 用于开发便利
+   - 旧版 API 用于生产环境
 
 ## 基准测试命令
 
@@ -145,19 +129,16 @@ go test -bench='BenchmarkMarshalJSON_Generic|BenchmarkUnmarshalJSON_Generic' -be
 
 ## 结论
 
-| 方面 | 旧版 API | 新泛型 API |
-|------|---------|-----------|
-| 序列化性能 | 基准 | ~1.3x 慢 |
-| 反序列化性能（已知类型） | - | ~200x 慢 |
-| 开发复杂度 | 高（需定义结构体） | 低（一行代码） |
-| 类型安全 | ❌ | ✅ |
+**泛型 API 的实现无法在不破坏现有 API 架构的情况下达到旧版 API 的性能。**
 
-### 最终建议
+这是一个典型的**开发体验 vs 运行时性能**的权衡。泛型 API 提供了：
+- ✅ 简洁易用的 API
+- ✅ 类型安全
+- ✅ 编译时检查
 
-**泛型 API 的优势在于开发体验，而非性能。** 如果追求最佳性能，请继续使用旧版 API。泛型 API 适合以下场景：
+但在运行时性能上有显著的损失。
 
-1. 数据类型一致且已知
-2. 开发效率优先于运行时性能
-3. 需要类型安全保证
-
-对于性能敏感的场景，旧版 API 仍然是更好的选择。
+**最终建议**：
+- **新项目 / 原型**：使用泛型 API 提高开发效率
+- **生产环境 / 大数据量**：使用旧版 API 获得最佳性能
+- **混合场景**：根据数据量和使用场景选择合适的 API

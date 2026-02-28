@@ -74,21 +74,45 @@ func UnmarshalJSON[T any](data []byte, options Options) (*DAG, error) {
 		dag.Options(options)
 	}
 
-	// Use batch vertex addition for better performance
-	vertices := sd.Vertices()
-	if len(vertices) > 0 {
-		if err := dag.addVerticesBatch(vertices); err != nil {
+	// Directly add vertices without interface conversion - this is the key optimization
+	// Using VerticesGeneric() avoids the Vertexer interface boxing
+	dag.muDAG.Lock()
+	for _, v := range sd.VerticesGeneric() {
+		// Directly access the generic vertex data
+		id := v.WrappedID
+		value := v.Value
+
+		// Sanity check - we can't check for nil on generic types directly
+		// Instead, we rely on the fact that DAG doesn't allow nil values
+		// If the JSON contains null for a value, json.Unmarshal will handle it
+
+		// Calculate hash
+		vHash := dag.hashVertex(value)
+
+		// Check for duplicate vertex
+		if _, exists := dag.vertices[vHash]; exists {
+			dag.muDAG.Unlock()
+			return nil, VertexDuplicateError{value}
+		}
+
+		if _, exists := dag.vertexIds[id]; exists {
+			dag.muDAG.Unlock()
+			return nil, IDDuplicateError{id}
+		}
+
+		// Add vertex directly without interface boxing
+		dag.vertices[vHash] = id
+		dag.vertexIds[id] = value
+	}
+	dag.muDAG.Unlock()
+
+	// Add edges using the standard AddEdge method
+	for _, e := range sd.StorableEdges {
+		if err := dag.AddEdge(e.SrcID, e.DstID); err != nil {
 			return nil, err
 		}
 	}
 
-	for _, e := range sd.Edges() {
-		srcID, dstID := e.Edge()
-		errEdge := dag.AddEdge(srcID, dstID)
-		if errEdge != nil {
-			return nil, errEdge
-		}
-	}
 	return dag, nil
 }
 

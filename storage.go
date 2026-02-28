@@ -106,6 +106,12 @@ func (g storableDAGGeneric[T]) Vertices() []Vertexer {
 	return vertices
 }
 
+// VerticesGeneric returns the vertices as their generic type T directly,
+// avoiding interface conversion overhead.
+func (g storableDAGGeneric[T]) VerticesGeneric() []storableVertexGeneric[T] {
+	return g.StorableVertices
+}
+
 func (g storableDAGGeneric[T]) Edges() []Edger {
 	edges := make([]Edger, 0, len(g.StorableEdges))
 	for _, e := range g.StorableEdges {
