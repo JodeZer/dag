@@ -9,10 +9,31 @@ import (
 //
 // It traverses the DAG using the Depth-First-Search algorithm
 // and uses an internal structure to store vertices and edges.
+//
+// Deprecated: Use MarshalGeneric[T] for better performance with typed data.
 func (d *DAG) MarshalJSON() ([]byte, error) {
 	mv := newMarshalVisitor(d)
 	d.DFSWalk(mv)
 	return json.Marshal(mv.storableDAG)
+}
+
+// MarshalGeneric returns the JSON encoding of DAG with typed vertex values.
+//
+// The generic parameter T specifies the type of vertex values.
+// This is the recommended method for serialization when using the generic API.
+//
+// Example usage:
+//
+//   // Simple type
+//   data, err := dag.MarshalGeneric[string](d)
+//
+//   // Complex custom type
+//   type Person struct { Name string; Age int }
+//   data, err := dag.MarshalGeneric[Person](d)
+func MarshalGeneric[T any](d *DAG) ([]byte, error) {
+	mv := newGenericMarshalVisitor[T](d)
+	d.DFSWalk(mv)
+	return json.Marshal(mv.storableDAGGeneric)
 }
 
 // UnmarshalJSON is an informative method. See the UnmarshalJSON function below.
@@ -47,7 +68,11 @@ func UnmarshalJSON[T any](data []byte, options Options) (*DAG, error) {
 	}
 
 	dag := NewDAG()
-	dag.Options(options)
+
+	// Set options only if VertexHashFunc is provided
+	if options.VertexHashFunc != nil {
+		dag.Options(options)
+	}
 
 	// Use batch vertex addition for better performance
 	vertices := sd.Vertices()
@@ -148,5 +173,65 @@ func (mv *marshalVisitor) Visit(v Vertexer) {
 	for dstID := range children {
 		e := storableEdge{SrcID: srcID, DstID: dstID}
 		mv.StorableEdges = append(mv.StorableEdges, e)
+	}
+}
+
+// genericMarshalVisitor is a visitor that collects vertices and edges for generic serialization.
+type genericMarshalVisitor[T any] struct {
+	d                  *DAG
+	storableDAGGeneric storableDAGGeneric[T]
+}
+
+func newGenericMarshalVisitor[T any](d *DAG) *genericMarshalVisitor[T] {
+	// Pre-allocate memory based on expected graph size
+	// This reduces reallocations during the walk
+	order := d.GetOrder()
+	size := d.GetSize()
+	return &genericMarshalVisitor[T]{
+		d: d,
+		storableDAGGeneric: storableDAGGeneric[T]{
+			StorableVertices: make([]storableVertexGeneric[T], 0, order),
+			StorableEdges:    make([]storableEdge, 0, size),
+		},
+	}
+}
+
+func (mv *genericMarshalVisitor[T]) Visit(v Vertexer) {
+	// Extract vertex ID and value
+	id, value := v.Vertex()
+
+	// Convert value to type T
+	var typedValue T
+	if value != nil {
+		// Try type assertion first
+		if typed, ok := value.(T); ok {
+			typedValue = typed
+		} else {
+			// Fall back to JSON marshaling/unmarshaling for type conversion
+			valueJSON, err := json.Marshal(value)
+			if err != nil {
+				return
+			}
+			if err := json.Unmarshal(valueJSON, &typedValue); err != nil {
+				return
+			}
+		}
+	}
+
+	// Add vertex to storable DAG
+	mv.storableDAGGeneric.StorableVertices = append(mv.storableDAGGeneric.StorableVertices, storableVertexGeneric[T]{
+		WrappedID: id,
+		Value:     typedValue,
+	})
+
+	// Add edges
+	// Why not use Mutex here?
+	// Because at the time of Walk,
+	// the read lock has been used to protect the dag.
+	children, _ := mv.d.getChildren(id)
+	// Directly iterate over map keys - no need to sort for serialization
+	for dstID := range children {
+		e := storableEdge{SrcID: id, DstID: dstID}
+		mv.storableDAGGeneric.StorableEdges = append(mv.storableDAGGeneric.StorableEdges, e)
 	}
 }

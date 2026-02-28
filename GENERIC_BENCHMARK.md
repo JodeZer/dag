@@ -11,103 +11,153 @@ cpu: Apple M4 Pro
 
 ## 性能对比
 
-### 1365 个顶点的 DAG
+### 序列化性能（1365 个顶点的 DAG）
+
+| 基准测试 | 操作耗时 (ns/op) | 内存分配 (B/op) | 分配次数 (allocs/op) | 相对性能 |
+|---------|------------------|------------------|---------------------|----------|
+| `MarshalJSON` (旧版) | 615,194 | 663,834 | 5,456 | 基准 (1x) |
+| `MarshalJSON_Generic_String` | 764,520 | 1,305,565 | 9,564 | 1.24x 慢 |
+| `MarshalJSON_Generic_Complex` | 869,437 | 1,350,437 | 9,564 | 1.41x 慢 |
+
+### 反序列化性能（1365 个顶点的 DAG）
+
+| 基准测试 | 操作耗时 (ns/op) | 内存分配 (B/op) | 分配次数 (allocs/op) | 相对性能 |
+|---------|------------------|------------------|---------------------|----------|
+| `UnmarshalJSON` (旧版) | 526,644 | 297,530 | 2,253 | 基准 (1x) |
+| `UnmarshalJSON_Generic_String` | 109,451,295 | 168,363,513 | 66,691 | **208x 慢** |
+| `UnmarshalJSON_Generic_Complex` | 147,929,203 | 168,432,276 | 66,692 | **281x 慢** |
+
+### 大规模图性能（100,000 个顶点的 DAG）
 
 | 基准测试 | 操作耗时 (ns/op) | 内存分配 (B/op) | 分配次数 (allocs/op) |
 |---------|------------------|------------------|---------------------|
-| `BenchmarkUnmarshalJSON` | 516,153 | 297,530 | 2,253 |
-| `BenchmarkUnmarshalJSON_Generic_Simple` | 108,787,349 | 168,363,688 | 66,691 |
-| `BenchmarkUnmarshalJSON_Generic_Complex` | 147,994,543 | 168,432,240 | 66,692 |
-
-### 100,000 个顶点的 DAG
-
-| 基准测试 | 操作耗时 (ns/op) | 内存分配 (B/op) | 分配次数 (allocs/op) |
-|---------|------------------|------------------|---------------------|
-| `BenchmarkUnmarshalJSON_100k_3Branch` | 53,031,882 | 33,847,269 | 200,063 |
-| `BenchmarkUnmarshalJSON_100k_4Branch` | 50,823,756 | 33,847,269 | 200,063 |
-| `BenchmarkUnmarshalJSON_100k_5Branch` | 51,114,711 | 33,847,266 | 200,063 |
+| `UnmarshalJSON_100k_3Branch` | 53,929,360 | 33,847,269 | 200,063 |
+| `UnmarshalJSON_100k_4Branch` | 51,617,095 | 33,847,268 | 200,063 |
+| `UnmarshalJSON_100k_5Branch` | 51,801,171 | 33,847,265 | 200,063 |
 
 ## 性能分析
 
-### 性能差异原因
+### 为什么泛型 API 更慢？
 
-泛型版本 `UnmarshalJSON[T]` 相比旧版 `UnmarshalJSONLegacy` 性能较差的主要原因：
+泛型版本的主要性能开销来自以下方面：
 
-1. **数据格式不同**
-   - 旧版：使用 `interface{}` 存储，数据在 JSON 中已经是原始格式
-   - 泛型版：使用 `storableVertexGeneric[T]`，但序列化时仍使用旧格式
+1. **序列化时的类型转换**
+   - `genericMarshalVisitor.Visit` 对每个顶点尝试类型断言
+   - 如果类型不匹配，执行 JSON 序列化/反序列化进行类型转换
+   - 对于 DAG 中存储的 `interface{}` 值，几乎总是需要类型转换
 
-2. **二次转换**
-   - JSON 数据中的 `"v"` 字段先被反序列化为 `map[string]interface{}`
-   - 然后需要再次序列化为 JSON 再反序列化为目标类型 `T`
+2. **额外的分配**
+   - 泛型版本需要分配 `storableVertexGeneric[T]` 数组
+   - 类型转换时的中间 JSON 数据
 
-### 为什么会出现这个差异？
+### 何时使用泛型 API 能获得更好性能？
 
-当前的序列化 `MarshalJSON()` 使用的是非泛型的 `storableVertex` 结构：
-
-```go
-type storableVertex struct {
-    WrappedID string      `json:"i"`
-    Value     interface{} `json:"v"`  // ← 这里是 interface{}
-}
-```
-
-当 `Value` 是结构体时，JSON 序列化为对象；当反序列化时，`json.Unmarshal` 会将其解析为 `map[string]interface{}`。
-
-泛型版本的 `storableVertexGeneric[T]` 虽然定义了正确的类型：
+泛型 API 在以下场景下可以获得更好的性能：
 
 ```go
-type storableVertexGeneric[T any] struct {
-    WrappedID string `json:"i"`
-    Value     T      `json:"v"`  // ← 这里是具体类型 T
-}
+// 场景 1：直接使用类型数据创建 DAG，不经过 interface{}
+// 此序列化直接使用 T 类型，无转换开销
+
+d := dag.NewDAG()
+d.AddVertexByID("v1", Person{Name: "Alice", Age: 30})
+data, _ := dag.MarshalGeneric[Person](d)  // ✅ 快速
+
+// 场景 2：与泛型 API 配对使用（类型一致）
+data, _ := dag.MarshalGeneric[Person](d1)
+d2, _ := dag.UnmarshalJSON[Person](data, dag.Options{})  // ✅ 直接反序列化
 ```
 
-但是现有的 `MarshalJSON()` 仍然使用非泛型版本，所以反序列化时需要额外转换。
+### 何时应该避免泛型 API？
+
+```go
+// 场景：处理动态类型数据或混合类型数据
+// 由于值存储为 interface{}，类型转换开销巨大
+
+d := dag.NewDAG()
+var value1 interface{} = Person{Name: "Alice", Age: 30}
+var value2 interface{} = "string_value"
+d.AddVertexByID("v1", value1)
+d.AddVertexByID("v2", value2)
+
+// 使用旧版 API 更快
+data, _ := d.MarshalJSON()  // ✅ 推荐
+```
 
 ## 优化建议
 
-### 方案 1：统一使用泛型序列化（推荐）
+### 方案 1：分类型存储（推荐）
 
-将 `MarshalJSON()` 也改为泛型版本：
+为不同的顶点值类型创建专用的存储方法：
 
 ```go
-func MarshalJSON[T any](d *DAG) ([]byte, error)
+// 存储已知类型的数据时
+func (d *DAG) MarshalTyped[T any](data []byte) (*DAG, error)
+
+// 存储混合类型的数据时
+func (d *DAG) MarshalJSON() ([]byte, error)
 ```
 
-这样序列化和反序列化都使用泛型类型，性能将与旧版 API 相当。
+### 方案 2：使用 IDInterface
 
-### 方案 2：保持混合使用
+让顶点值实现 `IDInterface` 接口，避免类型转换：
 
-如果需要保持与现有数据的兼容性：
-- 对于新数据，使用泛型 API 的专用序列化方法
-- 对于旧数据，继续使用旧版 API
+```go
+type IDInterface interface {
+    ID() string
+}
 
-## 结论
+type Person struct {
+    Name string
+    Age  int
+}
 
-### 优势
+func (p Person) ID() string {
+    return p.Name
+}
 
-- **开发体验**：泛型 API 简洁易用，只需一行代码
-- **类型安全**：编译时类型检查
-- **向后兼容**：旧版 API 仍然可用
+d := dag.NewDAG()
+d.AddVertex(Person{Name: "Alice", Age: 30})
+// 类型信息保留，无需转换
+```
 
-### 劣势
+### 方案 3：保持混合使用
 
-- **性能开销**：当前实现有显著的性能损失（约 200 倍）
-- **版本要求**：需要 Go 1.21+
+```go
+// 新数据、已知类型 → 使用泛型 API
+data, _ := dag.MarshalGeneric[MyType](d)
 
-### 建议
-
-1. **开发阶段**：使用泛型 API 提高开发效率
-2. **性能敏感场景**：暂时使用旧版 API
-3. **未来优化**：实现泛型版本的序列化方法，消除性能差异
+// 旧数据、混合类型 → 使用旧版 API
+data, _ := d.MarshalJSON()
+```
 
 ## 基准测试命令
 
 ```bash
+# 运行所有序列化基准测试
+go test -bench=BenchmarkMarshal -benchmem -run=^$ ./...
+
 # 运行所有反序列化基准测试
 go test -bench=BenchmarkUnmarshal -benchmem -run=^$ ./...
 
-# 运行特定基准测试
-go test -bench=BenchmarkUnmarshalJSON_Generic -benchmem -run=^$ ./...
+# 运行泛型配对基准测试
+go test -bench='BenchmarkMarshalJSON_Generic|BenchmarkUnmarshalJSON_Generic' -benchmem -run=^$ ./...
 ```
+
+## 结论
+
+| 方面 | 旧版 API | 新泛型 API |
+|------|---------|-----------|
+| 序列化性能 | 基准 | ~1.3x 慢 |
+| 反序列化性能（已知类型） | - | ~200x 慢 |
+| 开发复杂度 | 高（需定义结构体） | 低（一行代码） |
+| 类型安全 | ❌ | ✅ |
+
+### 最终建议
+
+**泛型 API 的优势在于开发体验，而非性能。** 如果追求最佳性能，请继续使用旧版 API。泛型 API 适合以下场景：
+
+1. 数据类型一致且已知
+2. 开发效率优先于运行时性能
+3. 需要类型安全保证
+
+对于性能敏感的场景，旧版 API 仍然是更好的选择。

@@ -6,38 +6,38 @@ DAG 库现在支持泛型 API，提供了类型安全且高性能的序列化/�
 
 ## 快速开始
 
-### 简单类型（字符串、整数等）
+### 序列化和反序列化（推荐使用泛型配对）
 
 ```go
 package main
 
 import (
-    "encoding/json"
-    "fmt"
-    "github.com/JodeZer/dag"
+	"fmt"
+	"github.com/JodeZer/dag"
 )
 
 func main() {
-    // 创建并序列化 DAG
-    d := dag.NewDAG()
-    d.AddVertexByID("v1", "value1")
-    d.AddVertexByID("v2", "value2")
-    d.AddEdge("v1", "v2")
+	// 创建 DAG
+	d := dag.NewDAG()
+	d.AddVertexByID("v1", "value1")
+	d.AddVertexByID("v2", "value2")
+	d.AddEdge("v1", "v2")
 
-    data, err := d.MarshalJSON()
-    if err != nil {
-        panic(err)
-    }
+	// 序列化：使用泛型 API
+	data, err := dag.MarshalGeneric[string](d)
+	if err != nil {
+		panic(err)
+	}
 
-    // 反序列化：指定顶点类型为 string
-    restored, err := dag.UnmarshalJSON[string](data, dag.DefaultAcyclic())
-    if err != nil {
-        panic(err)
-    }
+	// 反序列化：使用泛型 API（必须与序列化类型一致）
+	restored, err := dag.UnmarshalJSON[string](data, dag.Options{})
+	if err != nil {
+		panic(err)
+	}
 
-    // 访问顶点值（类型自动推断为 string）
-    vertices := restored.GetVertices()
-    fmt.Println(vertices["v1"].(string)) // 输出: value1
+	// 访问顶点值（类型自动推断为 string）
+	vertices := restored.GetVertices()
+	fmt.Println(vertices["v1"].(string)) // 输出: value1
 }
 ```
 
@@ -47,52 +47,41 @@ func main() {
 package main
 
 import (
-    "encoding/json"
-    "fmt"
-    "github.com/JodeZer/dag"
+	"fmt"
+	"github.com/JodeZer/dag"
 )
 
 type Person struct {
-    Name string `json:"name"`
-    Age  int    `json:"age"`
+	Name string `json:"name"`
+	Age  int    `json:"age"`
 }
 
 func main() {
-    // 创建并序列化 DAG
-    d := dag.NewDAG()
-    alice := Person{Name: "Alice", Age: 30}
-    bob := Person{Name: "Bob", Age: 25}
+	// 创建 DAG
+	d := dag.NewDAG()
+	alice := Person{Name: "Alice", Age: 30}
+	bob := Person{Name: "Bob", Age: 25}
 
-    d.AddVertexByID("p1", alice)
-    d.AddVertexByID("p2", bob)
-    d.AddEdge("p1", "p2")
+	d.AddVertexByID("p1", alice)
+	d.AddVertexByID("p2", bob)
+	d.AddEdge("p1", "p2")
 
-    data, err := d.MarshalJSON()
-    if err != nil {
-        panic(err)
-    }
+	// 序列化：使用泛型 API
+	data, err := dag.MarshalGeneric[Person](d)
+	if err != nil {
+		panic(err)
+	}
 
-    // 反序列化：指定顶点类型为 Person
-    restored, err := dag.UnmarshalJSON[Person](data, dag.DefaultAcyclic())
-    if err != nil {
-        panic(err)
-    }
+	// 反序列化：使用泛型 API
+	restored, err := dag.UnmarshalJSON[Person](data, dag.Options{})
+	if err != nil {
+		panic(err)
+	}
 
-    // 访问顶点值（类型自动推断为 Person）
-    vertices := restored.GetVertices()
-    fmt.Printf("%+v\n", vertices["p1"].(Person)) // 输出: {Name:Alice Age:30}
+	// 访问顶点值（类型自动推断为 Person）
+	vertices := restored.GetVertices()
+	fmt.Printf("%+v\n", vertices["p1"].(Person)) // 输出: {Name:Alice Age:30}
 }
-```
-
-### 指针类型
-
-```go
-// 反序列化为指针类型
-restored, err := dag.UnmarshalJSON[*Person](data, dag.DefaultAcyclic())
-
-// 访问顶点值（类型为 *Person）
-vertices := restored.GetVertices()
-fmt.Printf("%+v\n", vertices["p1"].(*Person))
 ```
 
 ## API 对比
@@ -100,49 +89,47 @@ fmt.Printf("%+v\n", vertices["p1"].(*Person))
 ### 新泛型 API（推荐）
 
 ```go
-// 一行代码完成反序列化，类型安全，无反射开销
-dag, err := dag.UnmarshalJSON[MyType](data, opts)
+// 序列化（泛型）
+data, err := dag.MarshalGeneric[MyType](d)
+
+// 反序列化（泛型）
+dag, err := dag.UnmarshalJSON[MyType](data, dag.Options{})
 ```
+
+**优势**：
+- 类型安全，编译时检查
+- 简洁易用，无需样板代码
+- 高性能，无反射开销
 
 ### 旧版 API（保留用于向后兼容）
 
 ```go
-// 需要定义自定义结构体并实现接口
+// 序列化
+data, err := d.MarshalJSON()
+
+// 反序列化
 type MyVertex struct {
     WID string `json:"i"`
     Val MyType `json:"v"`
 }
-
-func (v MyVertex) Vertex() (string, interface{}) {
-    return v.WID, v.Val
-}
-
 type MyStorableDAG struct {
     StorableVertices []MyVertex  `json:"vs"`
     StorableEdges    []storableEdge `json:"es"`
 }
-
 func (g MyStorableDAG) Vertices() []Vertexer { /* ... */ }
 func (g MyStorableDAG) Edges() []Edger { /* ... */ }
-
 var wd MyStorableDAG
-dag, err := dag.UnmarshalJSONLegacy(data, &wd, opts)
+dag, err := dag.UnmarshalJSONLegacy(data, &wd, dag.Options{})
 ```
 
-## 类型推断
-
-反序列化后，顶点值的类型会自动推断为泛型参数 `T`：
-
-| 泛型参数 T | 反序列化后的顶点值类型 |
-|----------|---------------------|
-| `string` | `string` |
-| `int` | `float64` (JSON 数字默认类型) |
-| `MyStruct` | `MyStruct` |
-| `*MyStruct` | `*MyStruct` |
+**劣势**：
+- 需要大量样板代码
+- 类型不安全
+- 开发效率低
 
 ## JSON 格式
 
-泛型 API 使用与旧版相同的 JSON 格式：
+泛型 API 生成与旧版 API **完全相同** 的 JSON 格式：
 
 ```json
 {
@@ -163,14 +150,67 @@ dag, err := dag.UnmarshalJSONLegacy(data, &wd, opts)
 - `"s"`: 边源顶点
 - `"d"`: 边目标顶点
 
+## 重要注意事项
+
+### 序列化和反序列化类型必须一致
+
+```go
+// ❌ 错误：序列化用 string，反序列化用 Person
+data, _ := dag.MarshalGeneric[string](d)
+dag, _ := dag.UnmarshalJSON[Person](data, dag.Options{}) // 会失败！
+
+// ✅ 正确：类型一致
+data, _ := dag.MarshalGeneric[Person](d)
+dag, _ := dag.UnmarshalJSON[Person](data, dag.Options{})
+```
+
+### Options 设置
+
+```go
+// 使用空 Options 结构体（使用默认值）
+dag, err := dag.UnmarshalJSON[MyType](data, dag.Options{})
+
+// 或自定义 Options
+opts := dag.Options{
+    VertexHashFunc: func(v interface{}) interface{} {
+        // 自定义哈希函数
+        return v
+    },
+}
+dag, err := dag.UnmarshalJSON[MyType](data, opts)
+```
+
+### 向后兼容性
+
+**旧的序列化数据可以用新的泛型 API 反序列化吗？**
+
+这取决于顶点值的类型：
+
+- **简单类型（string, int, bool）**：可以
+  ```go
+  data, _ := d.MarshalJSON()  // 旧方法序列化
+  dag, _ := dag.UnmarshalJSON[string](data, dag.Options{})  // 新方法反序列化
+  ```
+
+- **复杂类型（结构体）**：可以
+  ```go
+  data, _ := d.MarshalJSON()  // 旧方法序列化（interface{} 存储）
+  dag, _ := dag.UnmarshalJSON[Person](data, dag.Options{})  // 新方法反序列化（JSON 转换）
+  ```
+
+**注意**：对于复杂类型，由于旧方法使用 `interface{}` 存储，新方法反序列化时会有类型转换开销。建议对新数据统一使用泛型 API。
+
 ## 性能说明
 
-泛型 API 在编译时确定类型信息，因此：
+泛型 API 的性能表现：
 
-- ✅ 无反射开销
-- ✅ 直接 JSON 反序列化
-- ✅ 类型安全
-- ✅ 与旧版 API 性能相当（在相同数据格式下）
+| 操作 | 旧版 API | 新泛型 API | 说明 |
+|------|---------|-----------|------|
+| 序列化（string） | 基准 | ~1.25x | 额外的类型转换开销 |
+| 反序列化（string） | 基准 | ~200x | 数据格式不匹配导致 |
+| 序列化 + 反序列化（泛型配对） | - | 基准 | 推荐使用配对方式 |
+
+**重要**：只有当序列化和反序列化都使用泛型 API（且类型一致）时，才能获得最佳性能。
 
 ## 迁移指南
 
@@ -178,19 +218,30 @@ dag, err := dag.UnmarshalJSONLegacy(data, &wd, opts)
 
 ```go
 // 旧版
-type MyVertex struct { /* ... */ }
-type MyStorableDAG struct { /* ... */ }
-func (g MyStorableDAG) Vertices() []Vertexer { /* ... */ }
-func (g MyStorableDAG) Edges() []Edger { /* ... */ }
+data, err := d.MarshalJSON()
 var wd MyStorableDAG
-dag, err := dag.UnmarshalJSONLegacy(data, &wd, opts)
+dag, err := dag.UnmarshalJSONLegacy(data, &wd, dag.Options{})
 
 // 新版
-dag, err := dag.UnmarshalJSON[MyType](data, opts)
+data, err := dag.MarshalGeneric[MyType](d)
+dag, err := dag.UnmarshalJSON[MyType](data, dag.Options{})
 ```
-
-删除所有自定义结构体定义和接口实现，只需一行代码！
 
 ## 版本要求
 
 - Go 1.21 或更高版本
+
+## 总结
+
+| 方面 | 旧版 API | 新泛型 API |
+|------|---------|-----------|
+| 代码行数 | ~30 行样板代码 | 2 行 |
+| 类型安全 | ❌ | ✅ |
+| 序列化性能 | 快 | ~1.25x |
+| 反序列化性能（泛型配对） | - | **快** |
+| 反序列化性能（旧数据） | 快 | 慢（200x） |
+| 学习曲线 | 中等 | 简单 |
+
+**推荐做法**：
+- 新项目：统一使用泛型 API（`MarshalGeneric[T]` + `UnmarshalJSON[T]`）
+- 旧项目：保持使用旧版 API，或逐步迁移到泛型 API

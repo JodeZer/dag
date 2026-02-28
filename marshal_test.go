@@ -234,6 +234,91 @@ func TestAddVerticesBatch(t *testing.T) {
 	testGraphsEqual(t, d1, d2)
 }
 
+// TestGenericMarshalUnmarshalJSONSimple tests the generic MarshalGeneric and UnmarshalJSON with simple string types
+func TestGenericMarshalUnmarshalJSONSimple(t *testing.T) {
+	// Create a DAG with string values
+	d := NewDAG()
+	_ = d.AddVertexByID("v1", "value1")
+	_ = d.AddVertexByID("v2", "value2")
+	_ = d.AddVertexByID("v3", "value3")
+	_ = d.AddEdge("v1", "v2")
+	_ = d.AddEdge("v2", "v3")
+
+	// Marshal using generic API
+	data, err := MarshalGeneric[string](d)
+	if err != nil {
+		t.Fatalf("MarshalGeneric failed: %v", err)
+	}
+
+	// Unmarshal using generic API
+	restored, err := UnmarshalJSON[string](data, defaultOptions())
+	if err != nil {
+		t.Fatalf("UnmarshalJSON failed: %v", err)
+	}
+
+	// Verify equivalence
+	testGraphsEqual(t, d, restored)
+
+	// Verify vertex values are correct
+	vertices := restored.GetVertices()
+	if v, ok := vertices["v1"]; ok {
+		if v != "value1" {
+			t.Errorf("Expected v1 value to be 'value1', got '%v'", v)
+		}
+	} else {
+		t.Error("Vertex v1 not found")
+	}
+}
+
+// TestGenericMarshalUnmarshalJSONComplex tests the generic MarshalGeneric and UnmarshalJSON with complex struct types
+func TestGenericMarshalUnmarshalJSONComplex(t *testing.T) {
+	type Person struct {
+		Name string `json:"name"`
+		Age  int    `json:"age"`
+	}
+
+	// Create a DAG with Person values
+	d := NewDAG()
+	alice := Person{Name: "Alice", Age: 30}
+	bob := Person{Name: "Bob", Age: 25}
+	charlie := Person{Name: "Charlie", Age: 35}
+
+	_ = d.AddVertexByID("p1", alice)
+	_ = d.AddVertexByID("p2", bob)
+	_ = d.AddVertexByID("p3", charlie)
+	_ = d.AddEdge("p1", "p2")
+	_ = d.AddEdge("p2", "p3")
+
+	// Marshal using generic API
+	data, err := MarshalGeneric[Person](d)
+	if err != nil {
+		t.Fatalf("MarshalGeneric failed: %v", err)
+	}
+
+	// Unmarshal using generic API
+	restored, err := UnmarshalJSON[Person](data, defaultOptions())
+	if err != nil {
+		t.Fatalf("UnmarshalJSON failed: %v", err)
+	}
+
+	// Verify equivalence
+	testGraphsEqual(t, d, restored)
+
+	// Verify vertex values are correct
+	vertices := restored.GetVertices()
+	if v, ok := vertices["p1"]; ok {
+		if person, ok := v.(Person); ok {
+			if person.Name != "Alice" || person.Age != 30 {
+				t.Errorf("Expected p1 value to be {Name:Alice, Age:30}, got %+v", person)
+			}
+		} else {
+			t.Errorf("Expected p1 value to be Person, got %T", v)
+		}
+	} else {
+		t.Error("Vertex p1 not found")
+	}
+}
+
 // TestUnmarshalJSONSimple tests the generic UnmarshalJSON with simple string types
 func TestUnmarshalJSONSimple(t *testing.T) {
 	data := []byte(`{"vs":[{"i":"v1","v":"value1"},{"i":"v2","v":"value2"}],"es":[{"s":"v1","d":"v2"}]}`)
