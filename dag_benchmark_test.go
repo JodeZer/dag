@@ -355,8 +355,8 @@ func BenchmarkUnmarshalJSON(b *testing.B) {
 
 	b.ResetTimer()
 	for i := 0; i < b.N; i++ {
-		newDAG := NewDAG()
-		_ = newDAG.UnmarshalJSON(data)
+		var wd storableDAG
+		_, _ = UnmarshalJSON(data, &wd, defaultOptions())
 	}
 }
 
@@ -415,6 +415,39 @@ func BenchmarkGetDescendants_100k_5Branch(b *testing.B) {
 	b.ResetTimer()
 	for i := 0; i < b.N; i++ {
 		_, _ = d.GetDescendants(rootID)
+	}
+}
+
+func BenchmarkUnmarshalJSON_100k_3Branch(b *testing.B) {
+	d := generateBalancedTreeDAG(100000, 3)
+	data, _ := d.MarshalJSON()
+	b.ResetTimer()
+
+	for i := 0; i < b.N; i++ {
+		var wd storableDAG
+		_, _ = UnmarshalJSON(data, &wd, defaultOptions())
+	}
+}
+
+func BenchmarkUnmarshalJSON_100k_4Branch(b *testing.B) {
+	d := generateBalancedTreeDAG(100000, 4)
+	data, _ := d.MarshalJSON()
+	b.ResetTimer()
+
+	for i := 0; i < b.N; i++ {
+		var wd storableDAG
+		_, _ = UnmarshalJSON(data, &wd, defaultOptions())
+	}
+}
+
+func BenchmarkUnmarshalJSON_100k_5Branch(b *testing.B) {
+	d := generateBalancedTreeDAG(100000, 5)
+	data, _ := d.MarshalJSON()
+	b.ResetTimer()
+
+	for i := 0; i < b.N; i++ {
+		var wd storableDAG
+		_, _ = UnmarshalJSON(data, &wd, defaultOptions())
 	}
 }
 
