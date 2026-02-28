@@ -1,6 +1,6 @@
 module github.com/JodeZer/dag
 
-go 1.12
+go 1.21
 
 // require github.com/hashicorp/terraform v0.12.20
 

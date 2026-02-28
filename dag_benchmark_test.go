@@ -2,6 +2,7 @@ package dag
 
 import (
 	"fmt"
+	"strconv"
 	"testing"
 )
 
@@ -356,7 +357,93 @@ func BenchmarkUnmarshalJSON(b *testing.B) {
 	b.ResetTimer()
 	for i := 0; i < b.N; i++ {
 		var wd storableDAG
-		_, _ = UnmarshalJSON(data, &wd, defaultOptions())
+		_, _ = UnmarshalJSONLegacy(data, &wd, defaultOptions())
+	}
+}
+
+func BenchmarkMarshalJSON_Generic_String(b *testing.B) {
+	// Create a DAG with string values for fair comparison
+	d := NewDAG()
+	for i := 0; i < 1365; i++ { // Same number of vertices as generateWideTreeDAG(4, 10)
+		id := "node_" + strconv.Itoa(i)
+		_ = d.AddVertexByID(id, "value_"+strconv.Itoa(i))
+	}
+	for i := 0; i < 1365-1; i++ {
+		_ = d.AddEdge("node_"+strconv.Itoa(i), "node_"+strconv.Itoa(i+1))
+	}
+
+	b.ResetTimer()
+	for i := 0; i < b.N; i++ {
+		_, _ = MarshalGeneric[string](d)
+	}
+}
+
+func BenchmarkUnmarshalJSON_Generic_String(b *testing.B) {
+	// Create a DAG with string values for fair comparison
+	d := NewDAG()
+	for i := 0; i < 1365; i++ { // Same number of vertices as generateWideTreeDAG(4, 10)
+		id := "node_" + strconv.Itoa(i)
+		_ = d.AddVertexByID(id, "value_"+strconv.Itoa(i))
+	}
+	for i := 0; i < 1365-1; i++ {
+		_ = d.AddEdge("node_"+strconv.Itoa(i), "node_"+strconv.Itoa(i+1))
+	}
+
+	// Use generic serialization for fair comparison
+	data, _ := MarshalGeneric[string](d)
+
+	b.ResetTimer()
+	for i := 0; i < b.N; i++ {
+		_, _ = UnmarshalJSON[string](data, defaultOptions())
+	}
+}
+
+func BenchmarkMarshalJSON_Generic_Complex(b *testing.B) {
+	type Person struct {
+		Name string `json:"name"`
+		Age  int    `json:"age"`
+	}
+
+	// Create a DAG with Person values for fair comparison
+	d := NewDAG()
+	for i := 0; i < 1365; i++ {
+		id := "node_" + strconv.Itoa(i)
+		p := Person{Name: "Person" + strconv.Itoa(i), Age: i % 100}
+		_ = d.AddVertexByID(id, p)
+	}
+	for i := 0; i < 1365-1; i++ {
+		_ = d.AddEdge("node_"+strconv.Itoa(i), "node_"+strconv.Itoa(i+1))
+	}
+
+	b.ResetTimer()
+	for i := 0; i < b.N; i++ {
+		_, _ = MarshalGeneric[Person](d)
+	}
+}
+
+func BenchmarkUnmarshalJSON_Generic_Complex(b *testing.B) {
+	type Person struct {
+		Name string `json:"name"`
+		Age  int    `json:"age"`
+	}
+
+	// Create a DAG with Person values for fair comparison
+	d := NewDAG()
+	for i := 0; i < 1365; i++ {
+		id := "node_" + strconv.Itoa(i)
+		p := Person{Name: "Person" + strconv.Itoa(i), Age: i % 100}
+		_ = d.AddVertexByID(id, p)
+	}
+	for i := 0; i < 1365-1; i++ {
+		_ = d.AddEdge("node_"+strconv.Itoa(i), "node_"+strconv.Itoa(i+1))
+	}
+
+	// Use generic serialization for fair comparison
+	data, _ := MarshalGeneric[Person](d)
+
+	b.ResetTimer()
+	for i := 0; i < b.N; i++ {
+		_, _ = UnmarshalJSON[Person](data, defaultOptions())
 	}
 }
 
@@ -425,7 +512,7 @@ func BenchmarkUnmarshalJSON_100k_3Branch(b *testing.B) {
 
 	for i := 0; i < b.N; i++ {
 		var wd storableDAG
-		_, _ = UnmarshalJSON(data, &wd, defaultOptions())
+		_, _ = UnmarshalJSONLegacy(data, &wd, defaultOptions())
 	}
 }
 
@@ -436,7 +523,7 @@ func BenchmarkUnmarshalJSON_100k_4Branch(b *testing.B) {
 
 	for i := 0; i < b.N; i++ {
 		var wd storableDAG
-		_, _ = UnmarshalJSON(data, &wd, defaultOptions())
+		_, _ = UnmarshalJSONLegacy(data, &wd, defaultOptions())
 	}
 }
 
@@ -447,7 +534,7 @@ func BenchmarkUnmarshalJSON_100k_5Branch(b *testing.B) {
 
 	for i := 0; i < b.N; i++ {
 		var wd storableDAG
-		_, _ = UnmarshalJSON(data, &wd, defaultOptions())
+		_, _ = UnmarshalJSONLegacy(data, &wd, defaultOptions())
 	}
 }
 
