@@ -4,7 +4,6 @@ import (
 	"sort"
 
 	llq "github.com/emirpasic/gods/queues/linkedlistqueue"
-	lls "github.com/emirpasic/gods/stacks/linkedliststack"
 )
 
 // Visitor is the interface that wraps the basic Visit method.
@@ -21,20 +20,24 @@ func (d *DAG) DFSWalk(visitor Visitor) {
 	d.muDAG.RLock()
 	defer d.muDAG.RUnlock()
 
-	stack := lls.New()
+	// Use native slice as stack for better performance (avoids interface type assertions)
+	stack := make([]storableVertex, 0, d.GetSize())
 
 	vertices := d.getRoots()
+	// Push roots in reverse order to maintain consistent traversal order
 	for _, id := range reversedVertexIDs(vertices) {
 		v := d.vertexIds[id]
 		sv := storableVertex{WrappedID: id, Value: v}
-		stack.Push(sv)
+		stack = append(stack, sv)
 	}
 
 	visited := make(map[string]bool, d.getSize())
 
-	for !stack.Empty() {
-		v, _ := stack.Pop()
-		sv := v.(storableVertex)
+	for len(stack) > 0 {
+		// Pop from stack
+		idx := len(stack) - 1
+		sv := stack[idx]
+		stack = stack[:idx]
 
 		if !visited[sv.WrappedID] {
 			visited[sv.WrappedID] = true
@@ -45,7 +48,7 @@ func (d *DAG) DFSWalk(visitor Visitor) {
 		for _, id := range reversedVertexIDs(vertices) {
 			v := d.vertexIds[id]
 			sv := storableVertex{WrappedID: id, Value: v}
-			stack.Push(sv)
+			stack = append(stack, sv)
 		}
 	}
 }

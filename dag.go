@@ -101,6 +101,22 @@ func (d *DAG) addVertexByID(id string, v interface{}) error {
 	return nil
 }
 
+// addVerticesBatch adds multiple vertices in a single lock acquisition
+// This is an internal method used for performance optimization
+func (d *DAG) addVerticesBatch(vertices []Vertexer) error {
+	d.muDAG.Lock()
+	defer d.muDAG.Unlock()
+
+	for _, v := range vertices {
+		id, value := v.Vertex()
+		err := d.addVertexByID(id, value)
+		if err != nil {
+			return err
+		}
+	}
+	return nil
+}
+
 // GetVertex returns a vertex by its id. GetVertex returns an error, if id is
 // the empty string or unknown.
 func (d *DAG) GetVertex(id string) (interface{}, error) {

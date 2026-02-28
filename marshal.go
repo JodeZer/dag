@@ -49,12 +49,15 @@ func UnmarshalJSON(data []byte, wd StorableDAG, options Options) (*DAG, error) {
 	}
 	dag := NewDAG()
 	dag.Options(options)
-	for _, v := range wd.Vertices() {
-		errVertex := dag.AddVertexByID(v.Vertex())
-		if errVertex != nil {
-			return nil, errVertex
+
+	// Use batch vertex addition for better performance
+	vertices := wd.Vertices()
+	if len(vertices) > 0 {
+		if err := dag.addVerticesBatch(vertices); err != nil {
+			return nil, err
 		}
 	}
+
 	for _, e := range wd.Edges() {
 		errEdge := dag.AddEdge(e.Edge())
 		if errEdge != nil {
@@ -70,7 +73,17 @@ type marshalVisitor struct {
 }
 
 func newMarshalVisitor(d *DAG) *marshalVisitor {
-	return &marshalVisitor{d: d}
+	// Pre-allocate memory based on expected graph size
+	// This reduces reallocations during the walk
+	order := d.GetOrder()
+	size := d.GetSize()
+	return &marshalVisitor{
+		d: d,
+		storableDAG: storableDAG{
+			StorableVertices: make([]Vertexer, 0, order),
+			StorableEdges:    make([]Edger, 0, size),
+		},
+	}
 }
 
 func (mv *marshalVisitor) Visit(v Vertexer) {
@@ -81,8 +94,8 @@ func (mv *marshalVisitor) Visit(v Vertexer) {
 	// Because at the time of Walk,
 	// the read lock has been used to protect the dag.
 	children, _ := mv.d.getChildren(srcID)
-	ids := vertexIDs(children)
-	for _, dstID := range ids {
+	// Directly iterate over map keys - no need to sort for serialization
+	for dstID := range children {
 		e := storableEdge{SrcID: srcID, DstID: dstID}
 		mv.StorableEdges = append(mv.StorableEdges, e)
 	}

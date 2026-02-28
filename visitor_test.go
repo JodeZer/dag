@@ -15,6 +15,38 @@ func (pv *testVisitor) Visit(v Vertexer) {
 	pv.Values = append(pv.Values, value.(string))
 }
 
+// testWalkOrderContains verifies that all expected elements are present in the walk result
+// regardless of their order
+func testWalkOrderContains(t *testing.T, dag *DAG, expected []string, walkFunc func(*DAG, Visitor)) {
+	pv := &testVisitor{}
+	walkFunc(dag, pv)
+
+	actual := pv.Values
+
+	// Create sets for comparison
+	expectedSet := make(map[string]bool)
+	for _, v := range expected {
+		expectedSet[v] = true
+	}
+
+	actualSet := make(map[string]bool)
+	for _, v := range actual {
+		actualSet[v] = true
+	}
+
+	// Check lengths match
+	if len(expectedSet) != len(actualSet) {
+		t.Errorf("Length mismatch: expected %d, got %d", len(expectedSet), len(actualSet))
+	}
+
+	// Check all expected elements are present
+	for v := range expectedSet {
+		if !actualSet[v] {
+			t.Errorf("Missing element: %s", v)
+		}
+	}
+}
+
 // schematic diagram:
 //
 //	v5
