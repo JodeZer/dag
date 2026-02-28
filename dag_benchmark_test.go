@@ -379,17 +379,30 @@ func BenchmarkMarshalJSON_Generic_String(b *testing.B) {
 }
 
 func BenchmarkUnmarshalJSON_Generic_String(b *testing.B) {
-	// Create a DAG with string values for fair comparison
+	// Create a DAG with string values - same structure as generateWideTreeDAG(4, 10)
 	d := NewDAG()
-	for i := 0; i < 1365; i++ { // Same number of vertices as generateWideTreeDAG(4, 10)
-		id := "node_" + strconv.Itoa(i)
-		_ = d.AddVertexByID(id, "value_"+strconv.Itoa(i))
-	}
-	for i := 0; i < 1365-1; i++ {
-		_ = d.AddEdge("node_"+strconv.Itoa(i), "node_"+strconv.Itoa(i+1))
+	rootID := "root_0"
+	_ = d.AddVertexByID(rootID, "root_value")
+
+	currentLevel := []string{rootID}
+
+	for level := 1; level < 4; level++ {
+		var nextLevel []string
+		nodeCounter := 0
+
+		for _, parentID := range currentLevel {
+			for b := 0; b < 10; b++ {
+				id := "node_" + strconv.Itoa(level) + "_" + strconv.Itoa(nodeCounter)
+				_ = d.AddVertexByID(id, "node_value_"+strconv.Itoa(level)+"_"+strconv.Itoa(nodeCounter))
+				_ = d.AddEdge(parentID, id)
+				nextLevel = append(nextLevel, id)
+				nodeCounter++
+			}
+		}
+		currentLevel = nextLevel
 	}
 
-	// Use generic serialization for fair comparison
+	// Use generic serialization
 	data, _ := MarshalGeneric[string](d)
 
 	b.ResetTimer()
@@ -404,15 +417,27 @@ func BenchmarkMarshalJSON_Generic_Complex(b *testing.B) {
 		Age  int    `json:"age"`
 	}
 
-	// Create a DAG with Person values for fair comparison
+	// Create a DAG with Person values - same structure as generateWideTreeDAG(4, 10)
 	d := NewDAG()
-	for i := 0; i < 1365; i++ {
-		id := "node_" + strconv.Itoa(i)
-		p := Person{Name: "Person" + strconv.Itoa(i), Age: i % 100}
-		_ = d.AddVertexByID(id, p)
-	}
-	for i := 0; i < 1365-1; i++ {
-		_ = d.AddEdge("node_"+strconv.Itoa(i), "node_"+strconv.Itoa(i+1))
+	rootID := "root_0"
+	_ = d.AddVertexByID(rootID, Person{Name: "Root", Age: 0})
+
+	currentLevel := []string{rootID}
+
+	for level := 1; level < 4; level++ {
+		var nextLevel []string
+		nodeCounter := 0
+
+		for _, parentID := range currentLevel {
+			for b := 0; b < 10; b++ {
+				id := "node_" + strconv.Itoa(level) + "_" + strconv.Itoa(nodeCounter)
+				_ = d.AddVertexByID(id, Person{Name: "Node" + strconv.Itoa(level) + "_" + strconv.Itoa(nodeCounter), Age: level*10 + nodeCounter})
+				_ = d.AddEdge(parentID, id)
+				nextLevel = append(nextLevel, id)
+				nodeCounter++
+			}
+		}
+		currentLevel = nextLevel
 	}
 
 	b.ResetTimer()
@@ -427,18 +452,30 @@ func BenchmarkUnmarshalJSON_Generic_Complex(b *testing.B) {
 		Age  int    `json:"age"`
 	}
 
-	// Create a DAG with Person values for fair comparison
+	// Create a DAG with Person values - same structure as generateWideTreeDAG(4, 10)
 	d := NewDAG()
-	for i := 0; i < 1365; i++ {
-		id := "node_" + strconv.Itoa(i)
-		p := Person{Name: "Person" + strconv.Itoa(i), Age: i % 100}
-		_ = d.AddVertexByID(id, p)
-	}
-	for i := 0; i < 1365-1; i++ {
-		_ = d.AddEdge("node_"+strconv.Itoa(i), "node_"+strconv.Itoa(i+1))
+	rootID := "root_0"
+	_ = d.AddVertexByID(rootID, Person{Name: "Root", Age: 0})
+
+	currentLevel := []string{rootID}
+
+	for level := 1; level < 4; level++ {
+		var nextLevel []string
+		nodeCounter := 0
+
+		for _, parentID := range currentLevel {
+			for b := 0; b < 10; b++ {
+				id := "node_" + strconv.Itoa(level) + "_" + strconv.Itoa(nodeCounter)
+				_ = d.AddVertexByID(id, Person{Name: "Node" + strconv.Itoa(level) + "_" + strconv.Itoa(nodeCounter), Age: level*10 + nodeCounter})
+				_ = d.AddEdge(parentID, id)
+				nextLevel = append(nextLevel, id)
+				nodeCounter++
+			}
+		}
+		currentLevel = nextLevel
 	}
 
-	// Use generic serialization for fair comparison
+	// Use generic serialization
 	data, _ := MarshalGeneric[Person](d)
 
 	b.ResetTimer()

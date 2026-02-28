@@ -117,6 +117,65 @@ func (d *DAG) addVerticesBatch(vertices []Vertexer) error {
 	return nil
 }
 
+// addEdgesBatch adds multiple edges in a single lock acquisition.
+// This is an internal method used for performance optimization during deserialization.
+// It differs from AddEdge by:
+// 1. Taking the lock once for all edges
+// 2. Skipping cache invalidation (caches are empty during deserialization)
+// 3. Performing loop detection efficiently with BFS search
+func (d *DAG) addEdgesBatch(edges []storableEdge) error {
+	d.muDAG.Lock()
+	defer d.muDAG.Unlock()
+
+	// Validate all edges and build adjacency
+	for _, e := range edges {
+		srcID := e.SrcID
+		dstID := e.DstID
+
+		// Validate IDs
+		if err := d.saneID(srcID); err != nil {
+			return err
+		}
+		if err := d.saneID(dstID); err != nil {
+			return err
+		}
+		if srcID == dstID {
+			return SrcDstEqualError{srcID, dstID}
+		}
+
+		src := d.vertexIds[srcID]
+		dst := d.vertexIds[dstID]
+		srcHash := d.hashVertex(src)
+		dstHash := d.hashVertex(dst)
+
+		// Check for duplicate edge
+		if d.isEdge(srcHash, dstHash) {
+			return EdgeDuplicateError{srcID, dstID}
+		}
+
+		// Check if adding this edge would create a loop
+		if d.wouldCreateLoop(srcHash, dstHash) {
+			return EdgeLoopError{srcID, dstID}
+		}
+
+		// Build adjacency structure
+		if _, exists := d.outboundEdge[srcHash]; !exists {
+			d.outboundEdge[srcHash] = make(map[interface{}]struct{})
+		}
+		d.outboundEdge[srcHash][dstHash] = struct{}{}
+
+		if _, exists := d.inboundEdge[dstHash]; !exists {
+			d.inboundEdge[dstHash] = make(map[interface{}]struct{})
+		}
+		d.inboundEdge[dstHash][srcHash] = struct{}{}
+	}
+
+	// No need to clear caches during deserialization
+	// Caches are empty and will be built on-demand later
+
+	return nil
+}
+
 // GetVertex returns a vertex by its id. GetVertex returns an error, if id is
 // the empty string or unknown.
 func (d *DAG) GetVertex(id string) (interface{}, error) {
@@ -1209,8 +1268,14 @@ func (d *DAG) hashVertex(v interface{}) interface{} {
 	return d.options.VertexHashFunc(v)
 }
 
+// copyMap creates a shallow copy of a map. For performance-critical paths
+// where the caller will immediately modify the copy, we use a specialized version
+// that pre-allocates the correct capacity.
 func copyMap(in map[interface{}]struct{}) map[interface{}]struct{} {
-	out := make(map[interface{}]struct{})
+	if len(in) == 0 {
+		return make(map[interface{}]struct{})
+	}
+	out := make(map[interface{}]struct{}, len(in))
 	for id, value := range in {
 		out[id] = value
 	}
