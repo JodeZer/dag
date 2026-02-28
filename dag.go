@@ -101,6 +101,22 @@ func (d *DAG) addVertexByID(id string, v interface{}) error {
 	return nil
 }
 
+// addVerticesBatch adds multiple vertices in a single lock acquisition
+// This is an internal method used for performance optimization
+func (d *DAG) addVerticesBatch(vertices []Vertexer) error {
+	d.muDAG.Lock()
+	defer d.muDAG.Unlock()
+
+	for _, v := range vertices {
+		id, value := v.Vertex()
+		err := d.addVertexByID(id, value)
+		if err != nil {
+			return err
+		}
+	}
+	return nil
+}
+
 // GetVertex returns a vertex by its id. GetVertex returns an error, if id is
 // the empty string or unknown.
 func (d *DAG) GetVertex(id string) (interface{}, error) {
@@ -204,13 +220,14 @@ func (d *DAG) AddEdge(srcID, dstID string) error {
 		return EdgeDuplicateError{srcID, dstID}
 	}
 
+	// check if adding src->dst would create a loop
+	if d.wouldCreateLoop(srcHash, dstHash) {
+		return EdgeLoopError{srcID, dstID}
+	}
+
 	// get descendents and ancestors as they are now
 	descendants := copyMap(d.getDescendants(dstHash))
 	ancestors := copyMap(d.getAncestors(srcHash))
-
-	if _, exists := descendants[srcHash]; exists {
-		return EdgeLoopError{srcID, dstID}
-	}
 
 	// prepare d.outbound[src], iff needed
 	if _, exists := d.outboundEdge[srcHash]; !exists {
@@ -241,6 +258,44 @@ func (d *DAG) AddEdge(srcID, dstID string) error {
 	delete(d.descendantsCache, srcHash)
 
 	return nil
+}
+
+// wouldCreateLoop checks if adding an edge from srcHash to dstHash would create a loop.
+// It performs a BFS from dstHash following outbound edges to see if srcHash is reachable.
+func (d *DAG) wouldCreateLoop(srcHash, dstHash interface{}) bool {
+	// Use a BFS queue and visited map to search from dstHash
+	var fifo []interface{}
+	visited := make(map[interface{}]struct{})
+
+	// Start with all children of dstHash
+	for child := range d.outboundEdge[dstHash] {
+		visited[child] = struct{}{}
+		fifo = append(fifo, child)
+	}
+
+	// BFS traversal
+	for {
+		if len(fifo) == 0 {
+			break
+		}
+		top := fifo[0]
+		fifo = fifo[1:]
+
+		// If we reached srcHash, adding src->dst would create a loop
+		if top == srcHash {
+			return true
+		}
+
+		// Add all unvisited children to the queue
+		for child := range d.outboundEdge[top] {
+			if _, exists := visited[child]; !exists {
+				visited[child] = struct{}{}
+				fifo = append(fifo, child)
+			}
+		}
+	}
+
+	return false
 }
 
 // IsEdge returns true, if there exists an edge between srcID and dstID.
