@@ -82,3 +82,83 @@ Edges:
   1 -> 2
   1 -> {foo bar}
 ```
+
+## Serialization
+
+DAGs can be serialized to and deserialized from JSON.
+
+### Simple Deserialization (Recommended)
+
+For most use cases, use `UnmarshalFromJSON` which provides a simple API:
+
+```go
+// Simple string type
+var vertexType string
+dag, err := dag.UnmarshalFromJSON(data, &vertexType, dag.DefaultAcyclic())
+
+// Complex custom type
+type Person struct {
+    Name string `json:"name"`
+    Age  int    `json:"age"`
+}
+var vertexType Person
+dag, err := dag.UnmarshalFromJSON(data, &vertexType, dag.DefaultAcyclic())
+
+// Integer type
+var vertexType int
+dag, err := dag.UnmarshalFromJSON(data, &vertexType, dag.DefaultAcyclic())
+```
+
+### Advanced Deserialization
+
+For complete control over vertex types, implement the `StorableDAG` interface and use `UnmarshalJSON`:
+
+```go
+type MyVertex struct {
+    WID string `json:"i"`
+    Val string `json:"v"`
+}
+
+func (v MyVertex) Vertex() (string, interface{}) {
+    return v.WID, v.Val
+}
+
+type MyStorableDAG struct {
+    StorableVertices []MyVertex     `json:"vs"`
+    StorableEdges    []storableEdge `json:"es"`
+}
+
+func (g MyStorableDAG) Vertices() []Vertexer {
+    l := make([]Vertexer, 0, len(g.StorableVertices))
+    for _, v := range g.StorableVertices {
+        l = append(l, v)
+    }
+    return l
+}
+
+func (g MyStorableDAG) Edges() []Edger {
+    l := make([]Edger, 0, len(g.StorableEdges))
+    for _, e := range g.StorableEdges {
+        l = append(l, e)
+    }
+    return l
+}
+
+// Usage
+var wd MyStorableDAG
+dag, err := dag.UnmarshalJSON(data, &wd, dag.DefaultAcyclic())
+```
+
+### Serialization
+
+To serialize a DAG to JSON:
+
+```go
+d := NewDAG()
+// ... add vertices and edges ...
+
+data, err := d.MarshalJSON()
+if err != nil {
+    panic(err)
+}
+```

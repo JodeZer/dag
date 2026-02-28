@@ -20,7 +20,55 @@ func (d *DAG) UnmarshalJSON(_ []byte) error {
 	return errors.New("this method is not supported, request function UnmarshalJSON instead")
 }
 
-// UnmarshalJSON parses the JSON-encoded data that defined by StorableDAG.
+// UnmarshalJSON parses JSON-encoded data and returns a new DAG.
+// This is the recommended function for unmarshaling DAGs from JSON.
+//
+// The generic parameter T specifies the type of vertex values. It can be any type
+// that json.Unmarshal can handle, including complex nested structs.
+//
+// Example usage:
+//
+//   // Simple type
+//   dag, err := dag.UnmarshalJSON[string](data, opts)
+//
+//   // Complex custom type
+//   type Person struct {
+//       Name string `json:"name"`
+//       Age  int    `json:"age"`
+//   }
+//   dag, err := dag.UnmarshalJSON[Person](data, opts)
+//
+//   // Pointer to struct type
+//   dag, err := dag.UnmarshalJSON[*Person](data, opts)
+func UnmarshalJSON[T any](data []byte, options Options) (*DAG, error) {
+	var sd storableDAGGeneric[T]
+	if err := json.Unmarshal(data, &sd); err != nil {
+		return nil, err
+	}
+
+	dag := NewDAG()
+	dag.Options(options)
+
+	// Use batch vertex addition for better performance
+	vertices := sd.Vertices()
+	if len(vertices) > 0 {
+		if err := dag.addVerticesBatch(vertices); err != nil {
+			return nil, err
+		}
+	}
+
+	for _, e := range sd.Edges() {
+		srcID, dstID := e.Edge()
+		errEdge := dag.AddEdge(srcID, dstID)
+		if errEdge != nil {
+			return nil, errEdge
+		}
+	}
+	return dag, nil
+}
+
+// UnmarshalJSONLegacy parses the JSON-encoded data that defined by StorableDAG.
+// This is the legacy function kept for backward compatibility.
 // It returns a new DAG defined by the vertices and edges of wd.
 // If the internal structure of data and wd do not match,
 // then deserialization will fail and return json error.
@@ -36,13 +84,15 @@ func (d *DAG) UnmarshalJSON(_ []byte) error {
 //     panic(err)
 // }
 // var wd YourStorableDAG
-// restoredDag, err := UnmarshalJSON(data, &wd)
+// restoredDag, err := UnmarshalJSONLegacy(data, &wd)
 // if err != nil {
 //     panic(err)
 // }
 //
 // For more specific information please read the test code.
-func UnmarshalJSON(data []byte, wd StorableDAG, options Options) (*DAG, error) {
+//
+// Deprecated: Use the generic UnmarshalJSON[T] function instead.
+func UnmarshalJSONLegacy(data []byte, wd StorableDAG, options Options) (*DAG, error) {
 	err := json.Unmarshal(data, &wd)
 	if err != nil {
 		return nil, err

@@ -5,6 +5,7 @@ var (
 	_ Edger       = (*storableEdge)(nil)
 	_ StorableDAG = (*storableDAG)(nil)
 	_ IDInterface = (*storableVertex)(nil)
+	_ StorableDAG = (*storableDAGGeneric[int])(nil)
 )
 
 // Vertexer is the interface that wraps the basic Vertex method.
@@ -46,6 +47,21 @@ func (v storableVertex) ID() string {
 	return v.WrappedID
 }
 
+// storableVertexGeneric implements the Vertexer interface for generic types.
+// It uses short json tag to reduce the number of bytes after serialization.
+type storableVertexGeneric[T any] struct {
+	WrappedID string `json:"i"`
+	Value     T      `json:"v"`
+}
+
+func (v storableVertexGeneric[T]) Vertex() (id string, value interface{}) {
+	return v.WrappedID, v.Value
+}
+
+func (v storableVertexGeneric[T]) ID() string {
+	return v.WrappedID
+}
+
 // storableEdge implements the Edger interface.
 // It is implemented as a storable structure.
 // And it uses short json tag to reduce the number of bytes after serialization.
@@ -72,4 +88,28 @@ func (g storableDAG) Vertices() []Vertexer {
 
 func (g storableDAG) Edges() []Edger {
 	return g.StorableEdges
+}
+
+// storableDAGGeneric implements the StorableDAG interface for generic types.
+// It acts as a serializable operable structure.
+// And it uses short json tag to reduce the number of bytes after serialization.
+type storableDAGGeneric[T any] struct {
+	StorableVertices []storableVertexGeneric[T] `json:"vs"`
+	StorableEdges    []storableEdge              `json:"es"`
+}
+
+func (g storableDAGGeneric[T]) Vertices() []Vertexer {
+	vertices := make([]Vertexer, 0, len(g.StorableVertices))
+	for _, v := range g.StorableVertices {
+		vertices = append(vertices, v)
+	}
+	return vertices
+}
+
+func (g storableDAGGeneric[T]) Edges() []Edger {
+	edges := make([]Edger, 0, len(g.StorableEdges))
+	for _, e := range g.StorableEdges {
+		edges = append(edges, e)
+	}
+	return edges
 }

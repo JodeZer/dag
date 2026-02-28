@@ -107,7 +107,7 @@ func testMarshalUnmarshalJSON(t *testing.T, d *DAG, _ string) {
 	}
 
 	var wd testStorableDAG
-	dag, err := UnmarshalJSON(data, &wd, defaultOptions())
+	dag, err := UnmarshalJSONLegacy(data, &wd, defaultOptions())
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -148,7 +148,7 @@ func TestMarshalUnmarshalJSONLargeGraph(t *testing.T) {
 
 			// Deserialize
 			var wd testStorableDAG
-			restored, err := UnmarshalJSON(data, &wd, defaultOptions())
+			restored, err := UnmarshalJSONLegacy(data, &wd, defaultOptions())
 			if err != nil {
 				t.Fatalf("UnmarshalJSON failed: %v", err)
 			}
@@ -185,7 +185,7 @@ func TestMarshalUnmarshalJSONLargeGraph(t *testing.T) {
 			}
 
 			var wd2 testStorableDAG
-			restored2, err := UnmarshalJSON(data2, &wd2, defaultOptions())
+			restored2, err := UnmarshalJSONLegacy(data2, &wd2, defaultOptions())
 			if err != nil {
 				t.Fatalf("Second UnmarshalJSON failed: %v", err)
 			}
@@ -232,4 +232,154 @@ func TestAddVerticesBatch(t *testing.T) {
 
 	// Verify equivalence
 	testGraphsEqual(t, d1, d2)
+}
+
+// TestUnmarshalJSONSimple tests the generic UnmarshalJSON with simple string types
+func TestUnmarshalJSONSimple(t *testing.T) {
+	data := []byte(`{"vs":[{"i":"v1","v":"value1"},{"i":"v2","v":"value2"}],"es":[{"s":"v1","d":"v2"}]}`)
+
+	dag, err := UnmarshalJSON[string](data, defaultOptions())
+	if err != nil {
+		t.Fatalf("UnmarshalJSON failed: %v", err)
+	}
+
+	// Verify vertex count
+	if dag.GetOrder() != 2 {
+		t.Errorf("Expected 2 vertices, got %d", dag.GetOrder())
+	}
+
+	// Verify edge count
+	if dag.GetSize() != 1 {
+		t.Errorf("Expected 1 edge, got %d", dag.GetSize())
+	}
+
+	// Verify vertex values
+	vertices := dag.GetVertices()
+	if v, ok := vertices["v1"]; ok {
+		if v != "value1" {
+			t.Errorf("Expected v1 value to be 'value1', got '%v'", v)
+		}
+	} else {
+		t.Error("Vertex v1 not found")
+	}
+
+	if v, ok := vertices["v2"]; ok {
+		if v != "value2" {
+			t.Errorf("Expected v2 value to be 'value2', got '%v'", v)
+		}
+	} else {
+		t.Error("Vertex v2 not found")
+	}
+
+	// Verify edge exists
+	isEdge, _ := dag.IsEdge("v1", "v2")
+	if !isEdge {
+		t.Error("Expected edge v1 -> v2 to exist")
+	}
+}
+
+// TestUnmarshalJSONComplex tests the generic UnmarshalJSON with complex struct types
+func TestUnmarshalJSONComplex(t *testing.T) {
+	type Person struct {
+		Name string `json:"name"`
+		Age  int    `json:"age"`
+	}
+
+	data := []byte(`{"vs":[{"i":"p1","v":{"name":"Alice","age":30}},{"i":"p2","v":{"name":"Bob","age":25}}],"es":[{"s":"p1","d":"p2"}]}`)
+
+	dag, err := UnmarshalJSON[Person](data, defaultOptions())
+	if err != nil {
+		t.Fatalf("UnmarshalJSON failed: %v", err)
+	}
+
+	// Verify vertex count
+	if dag.GetOrder() != 2 {
+		t.Errorf("Expected 2 vertices, got %d", dag.GetOrder())
+	}
+
+	// Verify vertex values are correctly unmarshaled
+	vertices := dag.GetVertices()
+	if v, ok := vertices["p1"]; ok {
+		if person, ok := v.(Person); ok {
+			if person.Name != "Alice" || person.Age != 30 {
+				t.Errorf("Expected p1 value to be {Name:Alice, Age:30}, got %+v", person)
+			}
+		} else {
+			t.Errorf("Expected p1 value to be Person, got %T", v)
+		}
+	} else {
+		t.Error("Vertex p1 not found")
+	}
+
+	if v, ok := vertices["p2"]; ok {
+		if person, ok := v.(Person); ok {
+			if person.Name != "Bob" || person.Age != 25 {
+				t.Errorf("Expected p2 value to be {Name:Bob, Age:25}, got %+v", person)
+			}
+		} else {
+			t.Errorf("Expected p2 value to be Person, got %T", v)
+		}
+	} else {
+		t.Error("Vertex p2 not found")
+	}
+}
+
+// TestUnmarshalJSONInteger tests the generic UnmarshalJSON with integer types
+func TestUnmarshalJSONInteger(t *testing.T) {
+	data := []byte(`{"vs":[{"i":"n1","v":42},{"i":"n2","v":100}],"es":[{"s":"n1","d":"n2"}]}`)
+
+	dag, err := UnmarshalJSON[int](data, defaultOptions())
+	if err != nil {
+		t.Fatalf("UnmarshalJSON failed: %v", err)
+	}
+
+	// Verify vertex values
+	vertices := dag.GetVertices()
+	if v, ok := vertices["n1"]; ok {
+		if v != 42 {
+			t.Errorf("Expected n1 value to be 42, got %v", v)
+		}
+	} else {
+		t.Error("Vertex n1 not found")
+	}
+
+	if v, ok := vertices["n2"]; ok {
+		if v != 100 {
+			t.Errorf("Expected n2 value to be 100, got %v", v)
+		}
+	} else {
+		t.Error("Vertex n2 not found")
+	}
+}
+
+// TestUnmarshalJSONCompatibility tests that the generic UnmarshalJSON
+// produces equivalent results to the legacy UnmarshalJSONLegacy
+func TestUnmarshalJSONCompatibility(t *testing.T) {
+	// Create a test DAG with string values
+	d := NewDAG()
+	_ = d.AddVertexByID("v1", "value1")
+	_ = d.AddVertexByID("v2", "value2")
+	_ = d.AddEdge("v1", "v2")
+
+	// Marshal using existing method
+	data, err := d.MarshalJSON()
+	if err != nil {
+		t.Fatalf("MarshalJSON failed: %v", err)
+	}
+
+	// Unmarshal using new generic UnmarshalJSON
+	dag1, err := UnmarshalJSON[string](data, defaultOptions())
+	if err != nil {
+		t.Fatalf("UnmarshalJSON failed: %v", err)
+	}
+
+	// Unmarshal using legacy UnmarshalJSONLegacy for comparison
+	var wd testStorableDAG
+	dag2, err := UnmarshalJSONLegacy(data, &wd, defaultOptions())
+	if err != nil {
+		t.Fatalf("UnmarshalJSONLegacy failed: %v", err)
+	}
+
+	// Verify both methods produce equivalent graphs
+	testGraphsEqual(t, dag1, dag2)
 }

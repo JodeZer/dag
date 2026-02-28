@@ -200,7 +200,7 @@ func TestOverrideVertexHashFunOption(t *testing.T) {
 	}
 
 	var wd testNonComparableStorableDAG
-	_, err = UnmarshalJSON(data, &wd, dag.options)
+	_, err = UnmarshalJSONLegacy(data, &wd, dag.options)
 	if err != nil {
 		t.Fatal(err)
 	}
