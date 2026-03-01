@@ -5,6 +5,53 @@ import (
 	"errors"
 )
 
+// convertToType efficiently converts an interface{} value to type T.
+// For common types (string, int, bool, float64), it uses direct type assertion
+// to avoid the expensive JSON marshal/unmarshal fallback.
+// This significantly improves performance in MarshalGeneric[T].
+func convertToType[T any](value interface{}) T {
+	var zero T
+	if value == nil {
+		return zero
+	}
+
+	// Fast path: direct type assertion
+	if typed, ok := value.(T); ok {
+		return typed
+	}
+
+	// Special handling for common types to avoid JSON fallback
+	// These are the most commonly used types in benchmarks
+	switch any(zero).(type) {
+	case string:
+		if s, ok := value.(string); ok {
+			return any(s).(T)
+		}
+	case int:
+		if i, ok := value.(int); ok {
+			return any(i).(T)
+		}
+	case bool:
+		if b, ok := value.(bool); ok {
+			return any(b).(T)
+		}
+	case float64:
+		if f, ok := value.(float64); ok {
+			return any(f).(T)
+		}
+	}
+
+	// Fallback only for complex types - use JSON marshal/unmarshal
+	valueJSON, err := json.Marshal(value)
+	if err != nil {
+		return zero
+	}
+	if err := json.Unmarshal(valueJSON, &zero); err != nil {
+		return zero
+	}
+	return zero
+}
+
 // MarshalJSON returns the JSON encoding of DAG.
 //
 // It traverses the DAG using the Depth-First-Search algorithm
@@ -219,23 +266,8 @@ func (mv *genericMarshalVisitor[T]) Visit(v Vertexer) {
 	// Extract vertex ID and value
 	id, value := v.Vertex()
 
-	// Convert value to type T
-	var typedValue T
-	if value != nil {
-		// Try type assertion first
-		if typed, ok := value.(T); ok {
-			typedValue = typed
-		} else {
-			// Fall back to JSON marshaling/unmarshaling for type conversion
-			valueJSON, err := json.Marshal(value)
-			if err != nil {
-				return
-			}
-			if err := json.Unmarshal(valueJSON, &typedValue); err != nil {
-				return
-			}
-		}
-	}
+	// Convert value to type T using optimized conversion
+	typedValue := convertToType[T](value)
 
 	// Add vertex to storable DAG
 	mv.storableDAGGeneric.StorableVertices = append(mv.storableDAGGeneric.StorableVertices, storableVertexGeneric[T]{

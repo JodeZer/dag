@@ -749,8 +749,8 @@ func TestTypedDAGCompatibilityWithDAG(t *testing.T) {
 		t.Fatalf("AddEdge failed: %v", err)
 	}
 
-	// Convert to DAG using ToDAG()
-	dag := typed.ToDAG()
+	// Convert to legacy DAG using ToLegacyDAG()
+	dag := typed.ToLegacyDAG()
 
 	// Verify the underlying DAG has the same structure
 	if dag.GetOrder() != 2 {
@@ -866,8 +866,8 @@ func TestTypedDAGMarshalToDAGUnmarshal(t *testing.T) {
 		t.Fatalf("UnmarshalJSON failed: %v", err)
 	}
 
-	// Convert to DAG using ToDAG()
-	dag := typed2.ToDAG()
+	// Convert to legacy DAG using ToLegacyDAG()
+	dag := typed2.ToLegacyDAG()
 
 	// Verify data
 	v, err := dag.GetVertex("p1")

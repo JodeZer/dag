@@ -1047,3 +1047,357 @@ func BenchmarkAddEdgeAllocs(b *testing.B) {
 		_ = d.AddEdge(src, dst)
 	}
 }
+
+// ============================================================================
+// Type Conversion Benchmarks
+// ============================================================================
+
+func BenchmarkConvertToString(b *testing.B) {
+	value := "test_value"
+	b.ReportAllocs()
+	b.ResetTimer()
+	for i := 0; i < b.N; i++ {
+		_ = convertToType[string](value)
+	}
+}
+
+func BenchmarkConvertToInt(b *testing.B) {
+	value := 42
+	b.ReportAllocs()
+	b.ResetTimer()
+	for i := 0; i < b.N; i++ {
+		_ = convertToType[int](value)
+	}
+}
+
+func BenchmarkConvertToBool(b *testing.B) {
+	value := true
+	b.ReportAllocs()
+	b.ResetTimer()
+	for i := 0; i < b.N; i++ {
+		_ = convertToType[bool](value)
+	}
+}
+
+func BenchmarkConvertToFloat64(b *testing.B) {
+	value := 3.14
+	b.ReportAllocs()
+	b.ResetTimer()
+	for i := 0; i < b.N; i++ {
+		_ = convertToType[float64](value)
+	}
+}
+
+type BenchmarkPerson struct {
+	Name string `json:"name"`
+	Age  int    `json:"age"`
+}
+
+func BenchmarkConvertToComplex(b *testing.B) {
+	value := BenchmarkPerson{Name: "Alice", Age: 30}
+	b.ReportAllocs()
+	b.ResetTimer()
+	for i := 0; i < b.N; i++ {
+		_ = convertToType[BenchmarkPerson](value)
+	}
+}
+
+// Benchmark the complete marshal/unmarshal cycle with optimized conversion
+func BenchmarkMarshalUnmarshalCycle_String(b *testing.B) {
+	// Create a DAG with string values - same structure as generateWideTreeDAG(4, 10)
+	d := NewDAG()
+	rootID := "root_0"
+	_ = d.AddVertexByID(rootID, "root_value")
+
+	currentLevel := []string{rootID}
+
+	for level := 1; level < 4; level++ {
+		var nextLevel []string
+		nodeCounter := 0
+
+		for _, parentID := range currentLevel {
+			for b := 0; b < 10; b++ {
+				id := "node_" + strconv.Itoa(level) + "_" + strconv.Itoa(nodeCounter)
+				_ = d.AddVertexByID(id, "node_value_"+strconv.Itoa(level)+"_"+strconv.Itoa(nodeCounter))
+				_ = d.AddEdge(parentID, id)
+				nextLevel = append(nextLevel, id)
+				nodeCounter++
+			}
+		}
+		currentLevel = nextLevel
+	}
+
+	// Use generic serialization
+	data, _ := MarshalGeneric[string](d)
+
+	b.ResetTimer()
+	b.ReportAllocs()
+	for i := 0; i < b.N; i++ {
+		_, _ = UnmarshalJSON[string](data, defaultOptions())
+	}
+}
+
+// ============================================================================
+// GenericDAG Benchmarks - Performance comparison with type-safe implementation
+// ============================================================================
+
+// Helper function to create a wide tree DAG using GenericDAG
+func generateGenericWideTreeDAG[T any](levels, branching int, valueFunc func(level, index int) T) *GenericDAG[T] {
+	dag := NewGenericDAG[T]()
+	rootID := "root_0"
+	_ = dag.AddVertexByID(rootID, valueFunc(0, 0))
+
+	currentLevel := []string{rootID}
+
+	for level := 1; level < levels; level++ {
+		var nextLevel []string
+		nodeCounter := 0
+
+		for _, parentID := range currentLevel {
+			for b := 0; b < branching; b++ {
+				id := "node_" + strconv.Itoa(level) + "_" + strconv.Itoa(nodeCounter)
+				_ = dag.AddVertexByID(id, valueFunc(level, nodeCounter))
+				_ = dag.AddEdge(parentID, id)
+				nextLevel = append(nextLevel, id)
+				nodeCounter++
+			}
+		}
+		currentLevel = nextLevel
+	}
+
+	return dag
+}
+
+func BenchmarkGenericDAG_MarshalJSON_String(b *testing.B) {
+	dag := generateGenericWideTreeDAG(4, 10, func(level, index int) string {
+		return "node_value_" + strconv.Itoa(level) + "_" + strconv.Itoa(index)
+	})
+
+	b.ResetTimer()
+	b.ReportAllocs()
+	for i := 0; i < b.N; i++ {
+		_, _ = dag.MarshalJSON()
+	}
+}
+
+func BenchmarkGenericDAG_UnmarshalJSON_String(b *testing.B) {
+	dag := generateGenericWideTreeDAG(4, 10, func(level, index int) string {
+		return "node_value_" + strconv.Itoa(level) + "_" + strconv.Itoa(index)
+	})
+	data, _ := dag.MarshalJSON()
+
+	b.ResetTimer()
+	b.ReportAllocs()
+	for i := 0; i < b.N; i++ {
+		_, _ = UnmarshalGenericJSON[string](data, defaultOptions())
+	}
+}
+
+func BenchmarkGenericDAG_MarshalJSON_Complex(b *testing.B) {
+	type Person struct {
+		Name string `json:"name"`
+		Age  int    `json:"age"`
+	}
+
+	dag := generateGenericWideTreeDAG(4, 10, func(level, index int) Person {
+		return Person{
+			Name: "Node" + strconv.Itoa(level) + "_" + strconv.Itoa(index),
+			Age:  level*10 + index,
+		}
+	})
+
+	b.ResetTimer()
+	b.ReportAllocs()
+	for i := 0; i < b.N; i++ {
+		_, _ = dag.MarshalJSON()
+	}
+}
+
+func BenchmarkGenericDAG_UnmarshalJSON_Complex(b *testing.B) {
+	type Person struct {
+		Name string `json:"name"`
+		Age  int    `json:"age"`
+	}
+
+	dag := generateGenericWideTreeDAG(4, 10, func(level, index int) Person {
+		return Person{
+			Name: "Node" + strconv.Itoa(level) + "_" + strconv.Itoa(index),
+			Age:  level*10 + index,
+		}
+	})
+	data, _ := dag.MarshalJSON()
+
+	b.ResetTimer()
+	b.ReportAllocs()
+	for i := 0; i < b.N; i++ {
+		_, _ = UnmarshalGenericJSON[Person](data, defaultOptions())
+	}
+}
+
+func BenchmarkTypedDAG_MarshalJSON_String(b *testing.B) {
+	dag := New[string]()
+	rootID := "root_0"
+	_ = dag.AddVertexByID(rootID, "root_value")
+
+	currentLevel := []string{rootID}
+
+	for level := 1; level < 4; level++ {
+		var nextLevel []string
+		nodeCounter := 0
+
+		for _, parentID := range currentLevel {
+			for b := 0; b < 10; b++ {
+				id := "node_" + strconv.Itoa(level) + "_" + strconv.Itoa(nodeCounter)
+				_ = dag.AddVertexByID(id, "node_value_"+strconv.Itoa(level)+"_"+strconv.Itoa(nodeCounter))
+				_ = dag.AddEdge(parentID, id)
+				nextLevel = append(nextLevel, id)
+				nodeCounter++
+			}
+		}
+		currentLevel = nextLevel
+	}
+
+	b.ResetTimer()
+	b.ReportAllocs()
+	for i := 0; i < b.N; i++ {
+		_, _ = dag.MarshalJSON()
+	}
+}
+
+func BenchmarkTypedDAG_UnmarshalJSON_String(b *testing.B) {
+	dag := New[string]()
+	rootID := "root_0"
+	_ = dag.AddVertexByID(rootID, "root_value")
+
+	currentLevel := []string{rootID}
+
+	for level := 1; level < 4; level++ {
+		var nextLevel []string
+		nodeCounter := 0
+
+		for _, parentID := range currentLevel {
+			for b := 0; b < 10; b++ {
+				id := "node_" + strconv.Itoa(level) + "_" + strconv.Itoa(nodeCounter)
+				_ = dag.AddVertexByID(id, "node_value_"+strconv.Itoa(level)+"_"+strconv.Itoa(nodeCounter))
+				_ = dag.AddEdge(parentID, id)
+				nextLevel = append(nextLevel, id)
+				nodeCounter++
+			}
+		}
+		currentLevel = nextLevel
+	}
+
+	data, _ := dag.MarshalJSON()
+
+	b.ResetTimer()
+	b.ReportAllocs()
+	for i := 0; i < b.N; i++ {
+		_, _ = UnmarshalJSON[string](data, defaultOptions())
+	}
+}
+
+// Benchmark comparison: GenericDAG vs old DAG for serialization
+func BenchmarkComparison_MarshalJSON(b *testing.B) {
+	b.Run("OldDAG", func(b *testing.B) {
+		d := generateWideTreeDAG(4, 10)
+		b.ResetTimer()
+		b.ReportAllocs()
+		for i := 0; i < b.N; i++ {
+			_, _ = d.MarshalJSON()
+		}
+	})
+
+	b.Run("GenericDAG_String", func(b *testing.B) {
+		dag := generateGenericWideTreeDAG(4, 10, func(level, index int) string {
+			return "node_value_" + strconv.Itoa(level) + "_" + strconv.Itoa(index)
+		})
+		b.ResetTimer()
+		b.ReportAllocs()
+		for i := 0; i < b.N; i++ {
+			_, _ = dag.MarshalJSON()
+		}
+	})
+
+	b.Run("TypedDAG_String", func(b *testing.B) {
+		dag := New[string]()
+		rootID := "root_0"
+		_ = dag.AddVertexByID(rootID, "root_value")
+
+		currentLevel := []string{rootID}
+
+		for level := 1; level < 4; level++ {
+			var nextLevel []string
+			nodeCounter := 0
+
+			for _, parentID := range currentLevel {
+				for b := 0; b < 10; b++ {
+					id := "node_" + strconv.Itoa(level) + "_" + strconv.Itoa(nodeCounter)
+					_ = dag.AddVertexByID(id, "node_value_"+strconv.Itoa(level)+"_"+strconv.Itoa(nodeCounter))
+					_ = dag.AddEdge(parentID, id)
+					nextLevel = append(nextLevel, id)
+					nodeCounter++
+				}
+			}
+			currentLevel = nextLevel
+		}
+
+		b.ResetTimer()
+		b.ReportAllocs()
+		for i := 0; i < b.N; i++ {
+			_, _ = dag.MarshalJSON()
+		}
+	})
+}
+
+func BenchmarkGenericDAG_AddVertex(b *testing.B) {
+	dag := NewGenericDAG[int]()
+	b.ResetTimer()
+	b.ReportAllocs()
+	for i := 0; i < b.N; i++ {
+		_, _ = dag.AddVertex(i)
+	}
+}
+
+func BenchmarkGenericDAG_GetVertex(b *testing.B) {
+	dag := NewGenericDAG[int]()
+	for i := 0; i < 10000; i++ {
+		id := "vertex_" + strconv.Itoa(i)
+		_ = dag.AddVertexByID(id, i)
+	}
+	vertexID := "vertex_5000"
+
+	b.ResetTimer()
+	b.ReportAllocs()
+	for i := 0; i < b.N; i++ {
+		_, _ = dag.GetVertex(vertexID)
+	}
+}
+
+func BenchmarkGenericDAG_GetDescendants(b *testing.B) {
+	dag := generateGenericWideTreeDAG(4, 10, func(level, index int) string {
+		return "node_value_" + strconv.Itoa(level) + "_" + strconv.Itoa(index)
+	})
+	rootID := "root_0"
+
+	b.ResetTimer()
+	b.ReportAllocs()
+	for i := 0; i < b.N; i++ {
+		_, _ = dag.GetDescendants(rootID)
+	}
+}
+
+func BenchmarkGenericDAG_GetDescendantsCached(b *testing.B) {
+	dag := generateGenericWideTreeDAG(4, 10, func(level, index int) string {
+		return "node_value_" + strconv.Itoa(level) + "_" + strconv.Itoa(index)
+	})
+	rootID := "root_0"
+
+	// Populate cache
+	_, _ = dag.GetDescendants(rootID)
+
+	b.ResetTimer()
+	b.ReportAllocs()
+	for i := 0; i < b.N; i++ {
+		_, _ = dag.GetDescendants(rootID)
+	}
+}
