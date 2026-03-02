@@ -18,6 +18,11 @@ type IDInterface interface {
 }
 
 // DAG implements the data structure of the DAG.
+//
+// Deprecated: Use GenericDAG[T] for type-safe operations and better performance.
+// GenericDAG[T] eliminates type conversion overhead by storing vertex values
+// directly as type T instead of interface{}. Use TypedDAG[T] for a convenient
+// type-safe wrapper.
 type DAG struct {
 	muDAG            sync.RWMutex
 	vertices         map[interface{}]string
@@ -32,6 +37,9 @@ type DAG struct {
 }
 
 // NewDAG creates / initializes a new DAG.
+//
+// Deprecated: Use NewGenericDAG[T] for type-safe operations and better performance,
+// or use New[T]() for a convenient type-safe wrapper.
 func NewDAG() *DAG {
 	return &DAG{
 		vertices:         make(map[interface{}]string),

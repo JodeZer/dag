@@ -128,7 +128,10 @@ func TestDAG_AddVertexByID(t *testing.T) {
 	// add a single vertex and inspect the graph
 	v := iVertex{1}
 	id := "1"
-	_ = dag.AddVertexByID(id, v)
+	err := dag.AddVertexByID(id, v)
+	if err != nil {
+		t.Fatalf("AddVertexByID failed: %v", err)
+	}
 	if id != v.ID() {
 		t.Errorf("GetOrder().ID() = %s, want %s", id, v.ID())
 	}
@@ -255,8 +258,14 @@ func TestDAG_DeleteVertex(t *testing.T) {
 	v1, _ = dag.AddVertex(1)
 	v2, _ := dag.AddVertex(2)
 	v3, _ := dag.AddVertex(3)
-	_ = dag.AddEdge(v1, v2)
-	_ = dag.AddEdge(v2, v3)
+	err = dag.AddEdge(v1, v2)
+	if err != nil {
+		t.Fatalf("AddEdge failed: %v", err)
+	}
+	err = dag.AddEdge(v2, v3)
+	if err != nil {
+		t.Fatalf("AddEdge failed: %v", err)
+	}
 	if order := dag.GetOrder(); order != 3 {
 		t.Errorf("GetOrder() = %d, want 3", order)
 	}
@@ -331,7 +340,10 @@ func TestDAG_AddEdge(t *testing.T) {
 	// add a single edge and inspect the graph
 	errUnexpected := dag.AddEdge(v1, v2)
 	if errUnexpected != nil {
-		t.Error(errUnexpected)
+		t.Fatalf("AddEdge failed: %v", errUnexpected)
+	}
+	if children, _ := dag.GetChildren(v1); len(children) != 1 {
+		t.Errorf("GetChildren(v1) = %d, want 1", len(children))
 	}
 	if children, _ := dag.GetChildren(v1); len(children) != 1 {
 		t.Errorf("GetChildren(v1) = %d, want 1", len(children))

@@ -212,7 +212,10 @@ func TestConcurrentAddVertex(t *testing.T) {
 		go func(start int) {
 			defer wg.Done()
 			for j := start; j < numVertices; j += 10 {
-				_, _ = d.AddVertex(fmt.Sprintf("node_%d", j))
+				_, err := d.AddVertex(fmt.Sprintf("node_%d", j))
+				if err != nil {
+					t.Errorf("Concurrent AddVertex failed: %v", err)
+				}
 			}
 		}(i)
 	}
@@ -231,7 +234,10 @@ func TestConcurrentAddEdge(t *testing.T) {
 
 	// First add vertices
 	for i := 0; i < numVertices; i++ {
-		_, _ = d.AddVertex(fmt.Sprintf("node_%d", i))
+		_, err := d.AddVertex(fmt.Sprintf("node_%d", i))
+		if err != nil {
+			t.Fatalf("AddVertex failed: %v", err)
+		}
 	}
 
 	var wg sync.WaitGroup
@@ -241,8 +247,13 @@ func TestConcurrentAddEdge(t *testing.T) {
 		go func(start int) {
 			defer wg.Done()
 			for j := start; j < numVertices-1; j += 10 {
-				if d.AddEdge(fmt.Sprintf("node_%d", j), fmt.Sprintf("node_%d", j+1)) == nil {
+				err := d.AddEdge(fmt.Sprintf("node_%d", j), fmt.Sprintf("node_%d", j+1))
+				if err != nil {
 					// We're not tracking edges in this test, just checking for safety
+					// but log errors if they happen
+					if _, ok := err.(EdgeDuplicateError); !ok {
+						t.Logf("Concurrent AddEdge error: %v", err)
+					}
 				}
 			}
 		}(i)

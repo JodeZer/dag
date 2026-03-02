@@ -1,13 +1,10 @@
 package dag
 
-import (
-	"encoding/json"
-	"fmt"
-)
-
 // TypedDAG is a type-safe directed acyclic graph with vertex values of type T.
 // It provides compile-time type checking for vertex values and eliminates the need
 // for type assertions when working with vertices.
+//
+// Internally, TypedDAG uses GenericDAG[T] for optimal performance without type conversion overhead.
 //
 // Example usage:
 //
@@ -33,13 +30,13 @@ import (
 //	// Deserialize with type parameter (reasonable - need to know the type)
 //	restored, err := dag.UnmarshalJSON[Person](data, dag.Options{})
 type TypedDAG[T any] struct {
-	inner *DAG
+	inner *GenericDAG[T]
 }
 
 // New creates a new type-safe DAG with vertex values of type T.
 func New[T any]() *TypedDAG[T] {
 	return &TypedDAG[T]{
-		inner: NewDAG(),
+		inner: NewGenericDAG[T](),
 	}
 }
 
@@ -47,7 +44,7 @@ func New[T any]() *TypedDAG[T] {
 // and custom options.
 func NewWithOptions[T any](options Options) *TypedDAG[T] {
 	dag := &TypedDAG[T]{
-		inner: NewDAG(),
+		inner: NewGenericDAG[T](),
 	}
 	dag.inner.Options(options)
 	return dag
@@ -69,29 +66,12 @@ func (d *TypedDAG[T]) AddVertexByID(id string, v T) error {
 // GetVertex returns a vertex by its id.
 // GetVertex returns an error if id is empty or unknown.
 func (d *TypedDAG[T]) GetVertex(id string) (T, error) {
-	v, err := d.inner.GetVertex(id)
-	if err != nil {
-		var zero T
-		return zero, err
-	}
-	typed, ok := v.(T)
-	if !ok {
-		var zero T
-		return zero, fmt.Errorf("vertex %s is not of expected type %T", id, zero)
-	}
-	return typed, nil
+	return d.inner.GetVertex(id)
 }
 
 // GetVertices returns all vertices as a map of id to value.
 func (d *TypedDAG[T]) GetVertices() map[string]T {
-	result := make(map[string]T)
-	vertices := d.inner.GetVertices()
-	for id, v := range vertices {
-		if typed, ok := v.(T); ok {
-			result[id] = typed
-		}
-	}
-	return result
+	return d.inner.GetVertices()
 }
 
 // DeleteVertex deletes the vertex with the given id.
@@ -139,14 +119,7 @@ func (d *TypedDAG[T]) IsEmpty() bool {
 
 // GetLeaves returns all vertices without children.
 func (d *TypedDAG[T]) GetLeaves() map[string]T {
-	leaves := d.inner.GetLeaves()
-	result := make(map[string]T)
-	for id, v := range leaves {
-		if typed, ok := v.(T); ok {
-			result[id] = typed
-		}
-	}
-	return result
+	return d.inner.GetLeaves()
 }
 
 // IsLeaf returns true if the vertex with the given id has no children.
@@ -157,14 +130,7 @@ func (d *TypedDAG[T]) IsLeaf(id string) (bool, error) {
 
 // GetRoots returns all vertices without parents.
 func (d *TypedDAG[T]) GetRoots() map[string]T {
-	roots := d.inner.GetRoots()
-	result := make(map[string]T)
-	for id, v := range roots {
-		if typed, ok := v.(T); ok {
-			result[id] = typed
-		}
-	}
-	return result
+	return d.inner.GetRoots()
 }
 
 // IsRoot returns true if the vertex with the given id has no parents.
@@ -176,49 +142,19 @@ func (d *TypedDAG[T]) IsRoot(id string) (bool, error) {
 // GetParents returns all parents of the vertex with the id.
 // GetParents returns an error if id is empty or unknown.
 func (d *TypedDAG[T]) GetParents(id string) (map[string]T, error) {
-	parents, err := d.inner.GetParents(id)
-	if err != nil {
-		return nil, err
-	}
-	result := make(map[string]T)
-	for id, v := range parents {
-		if typed, ok := v.(T); ok {
-			result[id] = typed
-		}
-	}
-	return result, nil
+	return d.inner.GetParents(id)
 }
 
 // GetChildren returns all children of the vertex with the id.
 // GetChildren returns an error if id is empty or unknown.
 func (d *TypedDAG[T]) GetChildren(id string) (map[string]T, error) {
-	children, err := d.inner.GetChildren(id)
-	if err != nil {
-		return nil, err
-	}
-	result := make(map[string]T)
-	for id, v := range children {
-		if typed, ok := v.(T); ok {
-			result[id] = typed
-		}
-	}
-	return result, nil
+	return d.inner.GetChildren(id)
 }
 
 // GetAncestors returns all ancestors of the vertex with the id.
 // GetAncestors returns an error if id is empty or unknown.
 func (d *TypedDAG[T]) GetAncestors(id string) (map[string]T, error) {
-	ancestors, err := d.inner.GetAncestors(id)
-	if err != nil {
-		return nil, err
-	}
-	result := make(map[string]T)
-	for id, v := range ancestors {
-		if typed, ok := v.(T); ok {
-			result[id] = typed
-		}
-	}
-	return result, nil
+	return d.inner.GetAncestors(id)
 }
 
 // GetOrderedAncestors returns all ancestors of the vertex with id
@@ -231,17 +167,7 @@ func (d *TypedDAG[T]) GetOrderedAncestors(id string) ([]string, error) {
 // GetDescendants returns all descendants of the vertex with the id.
 // GetDescendants returns an error if id is empty or unknown.
 func (d *TypedDAG[T]) GetDescendants(id string) (map[string]T, error) {
-	descendants, err := d.inner.GetDescendants(id)
-	if err != nil {
-		return nil, err
-	}
-	result := make(map[string]T)
-	for id, v := range descendants {
-		if typed, ok := v.(T); ok {
-			result[id] = typed
-		}
-	}
-	return result, nil
+	return d.inner.GetDescendants(id)
 }
 
 // GetOrderedDescendants returns all descendants of the vertex with id
@@ -265,10 +191,10 @@ func (d *TypedDAG[T]) GetDescendantsGraph(id string) (*TypedDAG[T], string, erro
 }
 
 // GetAncestorsGraph returns a new TypedDAG consisting of the vertex with id
-// and all its ancestors (i.e. the subgraph). GetAncestorsGraph also returns
-// the id of the (copy of the) given vertex within the new graph (i.e. the id of
-// the single leaf of the new graph). GetAncestorsGraph returns an error if id
-// is empty or unknown.
+// and all its ancestors (i.e. the subgraph). GetAncestorsGraph also returns the id
+// of the (copy of the) given vertex within the new graph (i.e. the id of the
+// single leaf of the new graph). GetAncestorsGraph returns an error if id is
+// empty or unknown.
 func (d *TypedDAG[T]) GetAncestorsGraph(id string) (*TypedDAG[T], string, error) {
 	inner, newId, err := d.inner.GetAncestorsGraph(id)
 	if err != nil {
@@ -298,7 +224,9 @@ func (d *TypedDAG[T]) DescendantsWalker(id string) (chan string, chan bool, erro
 // callback function providing it the results of its respective parents.
 // The callback function is only executed after all parents have finished their work.
 func (d *TypedDAG[T]) DescendantsFlow(startID string, inputs []FlowResult, callback FlowCallback) ([]FlowResult, error) {
-	return d.inner.DescendantsFlow(startID, inputs, callback)
+	// Note: DescendantsFlow still works with the old DAG interface due to interface{} in FlowResult
+	// This is a compatibility layer - in future versions we might add a generic version
+	return d.toDAG().DescendantsFlow(startID, inputs, callback)
 }
 
 // ReduceTransitively transitively reduces the graph.
@@ -321,10 +249,10 @@ func (d *TypedDAG[T]) Copy() (*TypedDAG[T], error) {
 }
 
 // MarshalJSON returns the JSON encoding of the TypedDAG.
-// This method automatically infers the vertex type T from the TypedDAG,
-// so no generic parameter is needed.
+// This method automatically uses the GenericDAG implementation for optimal performance,
+// eliminating the type conversion overhead of the old implementation.
 func (d *TypedDAG[T]) MarshalJSON() ([]byte, error) {
-	return MarshalGeneric[T](d.inner)
+	return d.inner.MarshalJSON()
 }
 
 // Options sets the options for the TypedDAG.
@@ -351,55 +279,105 @@ func (d *TypedDAG[T]) Options(options Options) {
 //	}
 //	dag, err := dag.UnmarshalJSON[Person](data, dag.Options{})
 func UnmarshalJSON[T any](data []byte, options Options) (*TypedDAG[T], error) {
-	var sd storableDAGGeneric[T]
-	if err := json.Unmarshal(data, &sd); err != nil {
+	inner, err := UnmarshalGenericJSON[T](data, options)
+	if err != nil {
 		return nil, err
 	}
-
-	dag := NewDAG()
-
-	// Set options only if VertexHashFunc is provided
-	if options.VertexHashFunc != nil {
-		dag.Options(options)
-	}
-
-	// Batch add vertices - direct access to avoid interface boxing
-	dag.muDAG.Lock()
-	for _, v := range sd.VerticesGeneric() {
-		id := v.WrappedID
-		value := v.Value
-
-		vHash := dag.hashVertex(value)
-
-		// Check for duplicate vertex
-		if _, exists := dag.vertices[vHash]; exists {
-			dag.muDAG.Unlock()
-			return nil, VertexDuplicateError{value}
-		}
-
-		if _, exists := dag.vertexIds[id]; exists {
-			dag.muDAG.Unlock()
-			return nil, IDDuplicateError{id}
-		}
-
-		// Add vertex directly without interface boxing
-		dag.vertices[vHash] = id
-		dag.vertexIds[id] = value
-	}
-	dag.muDAG.Unlock()
-
-	// Batch add edges using optimized method
-	if len(sd.StorableEdges) > 0 {
-		if err := dag.addEdgesBatch(sd.StorableEdges); err != nil {
-			return nil, err
-		}
-	}
-
-	return &TypedDAG[T]{inner: dag}, nil
+	return &TypedDAG[T]{inner: inner}, nil
 }
 
-// ToDAG returns the underlying *DAG for compatibility with existing code.
-// This is a convenience method for migrating from the non-typed API.
-func (d *TypedDAG[T]) ToDAG() *DAG {
+// toDAG converts the TypedDAG to a *DAG for backward compatibility.
+// This is used for features like DescendantsFlow that haven't been genericized yet.
+func (d *TypedDAG[T]) toDAG() *DAG {
+	legacy := NewDAG()
+	legacy.Options(d.getOptions())
+
+	// Copy all vertices
+	for id, value := range d.inner.GetVertices() {
+		_ = legacy.AddVertexByID(id, value)
+	}
+
+	// Copy all edges
+	// We need to use the internal structure for efficiency
+	d.inner.muDAG.RLock()
+	for vHash, children := range d.inner.outboundEdge {
+		srcID := d.inner.vertices[vHash]
+		for childHash := range children {
+			dstID := d.inner.vertices[childHash]
+			_ = legacy.AddEdge(srcID, dstID)
+		}
+	}
+	d.inner.muDAG.RUnlock()
+
+	return legacy
+}
+
+// getOptions returns the current options of the TypedDAG.
+func (d *TypedDAG[T]) getOptions() Options {
+	// Return empty options for now - in a full implementation
+	// we might want to expose the options directly
+	return defaultOptions()
+}
+
+// ToDAG returns the underlying *GenericDAG for advanced usage.
+// This is a convenience method for users who need direct access to the generic implementation.
+func (d *TypedDAG[T]) ToDAG() *GenericDAG[T] {
 	return d.inner
+}
+
+// ToLegacyDAG returns a legacy *DAG for backward compatibility.
+// This is a convenience method for migrating from the non-typed API.
+// Deprecated: Use ToDAG instead for better performance.
+func (d *TypedDAG[T]) ToLegacyDAG() *DAG {
+	return d.toDAG()
+}
+
+// GetDescendantsGraphByDepth returns a new TypedDAG consisting of the vertex
+// with rootID and its descendants, limited to maxDepth levels.
+// Depth starts at 0 for the root node, 1 for its direct children, and so on.
+// Returns the new DAG, the id of the root node in the new graph, and an error.
+func (d *TypedDAG[T]) GetDescendantsGraphByDepth(rootID string, maxDepth int) (*TypedDAG[T], string, error) {
+	inner, newId, err := d.inner.GetDescendantsGraphByDepth(rootID, maxDepth)
+	if err != nil {
+		return nil, "", err
+	}
+	return &TypedDAG[T]{inner: inner}, newId, nil
+}
+
+// GetAncestorsGraphByDepth returns a new TypedDAG consisting of the vertex
+// with leafID and its ancestors, limited to maxDepth levels.
+// Depth starts at 0 for the leaf node, 1 for its direct parents, and so on.
+// Returns the new DAG, the id of the leaf node in the new graph, and an error.
+func (d *TypedDAG[T]) GetAncestorsGraphByDepth(leafID string, maxDepth int) (*TypedDAG[T], string, error) {
+	inner, newId, err := d.inner.GetAncestorsGraphByDepth(leafID, maxDepth)
+	if err != nil {
+		return nil, "", err
+	}
+	return &TypedDAG[T]{inner: inner}, newId, nil
+}
+
+// GetEdges returns a list of all edges in the DAG.
+// The returned edge list shares data with the DAG for better performance.
+// Use GetEdgesWithOption(CopyData) for a safe, independent copy.
+func (d *TypedDAG[T]) GetEdges() EdgeList {
+	return d.inner.GetEdges()
+}
+
+// GetEdgesWithOption returns a list of all edges in the DAG.
+// The option parameter determines whether the data is shared or copied.
+func (d *TypedDAG[T]) GetEdgesWithOption(option CopyOption) EdgeList {
+	return d.inner.GetEdgesWithOption(option)
+}
+
+// GetVerticesList returns a list of all vertices in the DAG.
+// The returned node list shares data with the DAG for better performance.
+// Use GetVerticesListWithOption(CopyData) for a safe, independent copy.
+func (d *TypedDAG[T]) GetVerticesList() NodeList[T] {
+	return d.inner.GetVerticesList()
+}
+
+// GetVerticesListWithOption returns a list of all vertices in the DAG.
+// The option parameter determines whether the data is shared or copied.
+func (d *TypedDAG[T]) GetVerticesListWithOption(option CopyOption) NodeList[T] {
+	return d.inner.GetVerticesListWithOption(option)
 }
