@@ -994,3 +994,340 @@ func (d *GenericDAG[T]) Options(options Options) {
 	defer d.muDAG.Unlock()
 	d.options = options
 }
+
+// GetDescendantsGraphByDepth returns a new GenericDAG consisting of the vertex
+// with rootID and its descendants, limited to maxDepth levels.
+// Depth starts at 0 for the root node, 1 for its direct children, and so on.
+// Returns the new DAG, the id of the root node in the new graph, and an error.
+func (d *GenericDAG[T]) GetDescendantsGraphByDepth(rootID string, maxDepth int) (*GenericDAG[T], string, error) {
+	return d.getRelativesGraphByDepth(rootID, maxDepth, false)
+}
+
+// GetAncestorsGraphByDepth returns a new GenericDAG consisting of the vertex
+// with leafID and its ancestors, limited to maxDepth levels.
+// Depth starts at 0 for the leaf node, 1 for its direct parents, and so on.
+// Returns the new DAG, the id of the leaf node in the new graph, and an error.
+func (d *GenericDAG[T]) GetAncestorsGraphByDepth(leafID string, maxDepth int) (*GenericDAG[T], string, error) {
+	return d.getRelativesGraphByDepth(leafID, maxDepth, true)
+}
+
+// getRelativesGraphByDepth returns a subgraph limited by depth using BFS traversal.
+func (d *GenericDAG[T]) getRelativesGraphByDepth(startID string, maxDepth int, asc bool) (*GenericDAG[T], string, error) {
+	// sanity checking
+	if startID == "" {
+		return nil, "", IDEmptyError{}
+	}
+	v, exists := d.vertexValues[startID]
+	if !exists {
+		return nil, "", IDUnknownError{startID}
+	}
+	vHash := d.hashVertex(v)
+
+	// create a new dag
+	newDAG := NewGenericDAG[T]()
+
+	// protect the graph from modification
+	d.muDAG.RLock()
+	defer d.muDAG.RUnlock()
+
+	// For unlimited depth, use the existing implementation
+	if maxDepth < 0 {
+		return d.getRelativesGraph(startID, asc)
+	}
+
+	// Use BFS with depth tracking
+	visited := make(map[interface{}]string)
+	idMap := make(map[string]string) // original ID -> new ID (for reference during traversal)
+
+	// BFS queue item
+	type queueItem struct {
+		vHash interface{}
+		depth int
+	}
+
+	var queue []queueItem
+	if asc {
+		// For ancestors, start with parents
+		for parent := range d.inboundEdge[vHash] {
+			queue = append(queue, queueItem{vHash: parent, depth: 1})
+		}
+	} else {
+		// For descendants, start with children
+		for child := range d.outboundEdge[vHash] {
+			queue = append(queue, queueItem{vHash: child, depth: 1})
+		}
+	}
+
+	// Add the start node first
+	newStartID := startID
+	if err := newDAG.AddVertexByID(newStartID, d.vertexValues[startID]); err != nil {
+		return nil, "", err
+	}
+	visited[vHash] = newStartID
+	idMap[startID] = newStartID
+
+	// BFS traversal
+	for len(queue) > 0 {
+		item := queue[0]
+		queue = queue[1:]
+
+		// Skip if we've exceeded max depth
+		if item.depth > maxDepth {
+			continue
+		}
+
+		// Get the original ID
+		origID := d.vertices[item.vHash]
+
+		// Add the vertex if not already visited
+		newID, exists := visited[item.vHash]
+		if !exists {
+			newID = origID
+			if err := newDAG.AddVertexByID(newID, d.vertexValues[origID]); err != nil {
+				return nil, "", err
+			}
+			visited[item.vHash] = newID
+			idMap[origID] = newID
+		}
+
+		// Add edge to this vertex
+		// Note: This is a placeholder - the actual edge handling is done in getRelativesGraphByDepthBFS
+		// We continue to use getRelativesGraphByDepthBFS for proper parent tracking
+		continue
+	}
+
+	// Re-implement with proper parent tracking
+	return d.getRelativesGraphByDepthBFS(startID, maxDepth, asc)
+}
+
+// getRelativesGraphByDepthBFS implements BFS with parent tracking for depth-limited subgraph extraction.
+func (d *GenericDAG[T]) getRelativesGraphByDepthBFS(startID string, maxDepth int, asc bool) (*GenericDAG[T], string, error) {
+	// create a new dag
+	newDAG := NewGenericDAG[T]()
+
+	// Track visited vertices and their new IDs
+	visited := make(map[interface{}]string)
+
+	// BFS queue item with parent tracking
+	type queueItem struct {
+		vHash    interface{}
+		depth    int
+		parentID string // new ID of the parent in the new graph
+	}
+
+	var queue []queueItem
+	startVHash := d.hashVertex(d.vertexValues[startID])
+
+	// Add the start node first
+	if err := newDAG.AddVertexByID(startID, d.vertexValues[startID]); err != nil {
+		return nil, "", err
+	}
+	visited[startVHash] = startID
+
+	// Initialize queue with direct relatives
+	if asc {
+		for parent := range d.inboundEdge[startVHash] {
+			queue = append(queue, queueItem{
+				vHash:    parent,
+				depth:    1,
+				parentID: startID,
+			})
+		}
+	} else {
+		for child := range d.outboundEdge[startVHash] {
+			queue = append(queue, queueItem{
+				vHash:    child,
+				depth:    1,
+				parentID: startID,
+			})
+		}
+	}
+
+	// BFS traversal
+	for len(queue) > 0 {
+		item := queue[0]
+		queue = queue[1:]
+
+		// Skip if we've exceeded max depth
+		if item.depth > maxDepth {
+			continue
+		}
+
+		// Get the original ID
+		origID := d.vertices[item.vHash]
+
+		// Add the vertex if not already visited
+		newID, exists := visited[item.vHash]
+		if !exists {
+			newID = origID
+			if err := newDAG.AddVertexByID(newID, d.vertexValues[origID]); err != nil {
+				return nil, "", err
+			}
+			visited[item.vHash] = newID
+		}
+
+		// Add edge from parent to this vertex
+		var srcID, dstID string
+		if asc {
+			// For ancestors: current -> parent
+			srcID, dstID = newID, item.parentID
+		} else {
+			// For descendants: parent -> current
+			srcID, dstID = item.parentID, newID
+		}
+		if err := newDAG.AddEdge(srcID, dstID); err != nil {
+			// Edge might already exist (diamond pattern), ignore
+			if _, ok := err.(EdgeDuplicateError); !ok {
+				return nil, "", err
+			}
+		}
+
+		// Enqueue next level of relatives
+		if item.depth < maxDepth {
+			var relatives map[interface{}]struct{}
+			var ok bool
+			if asc {
+				relatives, ok = d.inboundEdge[item.vHash]
+			} else {
+				relatives, ok = d.outboundEdge[item.vHash]
+			}
+
+			if ok {
+				for relative := range relatives {
+					if _, visited := visited[relative]; !visited {
+						queue = append(queue, queueItem{
+							vHash:    relative,
+							depth:    item.depth + 1,
+							parentID: newID,
+						})
+					}
+				}
+			}
+		}
+	}
+
+	return newDAG, startID, nil
+}
+
+// GetEdges returns a list of all edges in the DAG.
+// The returned edge list shares data with the DAG for better performance.
+// Use GetEdgesWithOption(CopyData) for a safe, independent copy.
+func (d *GenericDAG[T]) GetEdges() EdgeList {
+	return d.GetEdgesWithOption(ShareData)
+}
+
+// GetEdgesWithOption returns a list of all edges in the DAG.
+// The option parameter determines whether the data is shared or copied.
+func (d *GenericDAG[T]) GetEdgesWithOption(option CopyOption) EdgeList {
+	d.muDAG.RLock()
+	defer d.muDAG.RUnlock()
+
+	edgeList := NewEdgeList(d.getSize())
+
+	for vHash, children := range d.outboundEdge {
+		srcID := d.vertices[vHash]
+		for childHash := range children {
+			dstID := d.vertices[childHash]
+			edgeList.AddEdge(srcID, dstID)
+		}
+	}
+
+	if option == CopyData {
+		return *edgeList.Copy()
+	}
+	return *edgeList
+}
+
+// GetVerticesList returns a list of all vertices in the DAG.
+// The returned node list shares data with the DAG for better performance.
+// Use GetVerticesListWithOption(CopyData) for a safe, independent copy.
+func (d *GenericDAG[T]) GetVerticesList() NodeList[T] {
+	return d.GetVerticesListWithOption(ShareData)
+}
+
+// GetVerticesListWithOption returns a list of all vertices in the DAG.
+// The option parameter determines whether the data is shared or copied.
+func (d *GenericDAG[T]) GetVerticesListWithOption(option CopyOption) NodeList[T] {
+	d.muDAG.RLock()
+	defer d.muDAG.RUnlock()
+
+	nodeList := NewNodeList[T](d.getOrder())
+
+	for id, value := range d.vertexValues {
+		nodeList.AddNode(id, value)
+	}
+
+	if option == CopyData {
+		return *nodeList.Copy()
+	}
+	return *nodeList
+}
+
+// GetEdgesByDepth returns edges within the specified depth range from the root node.
+// The depth of an edge is determined by the depth of its target vertex.
+// For example, root->child edges are at depth 1 (child is at depth 1).
+// minDepth and maxDepth are inclusive.
+// Use maxDepth = -1 for unlimited depth.
+func (d *GenericDAG[T]) GetEdgesByDepth(rootID string, minDepth, maxDepth int) (EdgeList, error) {
+	// sanity checking
+	if rootID == "" {
+		return EdgeList{}, IDEmptyError{}
+	}
+	if _, exists := d.vertexValues[rootID]; !exists {
+		return EdgeList{}, IDUnknownError{rootID}
+	}
+	if minDepth < 0 {
+		return EdgeList{}, fmt.Errorf("minDepth must be >= 0")
+	}
+
+	d.muDAG.RLock()
+	defer d.muDAG.RUnlock()
+
+	edgeList := NewEdgeList(d.getSize())
+
+	// Use BFS to collect edges at specified depths
+	type queueItem struct {
+		vHash interface{}
+		depth int
+	}
+
+	queue := []queueItem{{vHash: d.hashVertex(d.vertexValues[rootID]), depth: 0}}
+	visited := make(map[interface{}]struct{})
+	visited[d.hashVertex(d.vertexValues[rootID])] = struct{}{}
+
+	for len(queue) > 0 {
+		item := queue[0]
+		queue = queue[1:]
+
+		// Skip if we've exceeded max depth
+		if maxDepth >= 0 && item.depth >= maxDepth {
+			continue
+		}
+
+		// Add edges if the target depth is within range
+		// Target depth = current depth + 1
+		targetDepth := item.depth + 1
+		if targetDepth >= minDepth && (maxDepth < 0 || targetDepth <= maxDepth) {
+			for childHash := range d.outboundEdge[item.vHash] {
+				srcID := d.vertices[item.vHash]
+				dstID := d.vertices[childHash]
+				edgeList.AddEdge(srcID, dstID)
+			}
+		}
+
+		// Enqueue children for next level
+		if maxDepth < 0 || item.depth < maxDepth-1 {
+			for childHash := range d.outboundEdge[item.vHash] {
+				if _, exists := visited[childHash]; !exists {
+					visited[childHash] = struct{}{}
+					queue = append(queue, queueItem{
+						vHash: childHash,
+						depth: item.depth + 1,
+					})
+				}
+			}
+		}
+	}
+
+	return *edgeList, nil
+}

@@ -331,3 +331,53 @@ func (d *TypedDAG[T]) ToDAG() *GenericDAG[T] {
 func (d *TypedDAG[T]) ToLegacyDAG() *DAG {
 	return d.toDAG()
 }
+
+// GetDescendantsGraphByDepth returns a new TypedDAG consisting of the vertex
+// with rootID and its descendants, limited to maxDepth levels.
+// Depth starts at 0 for the root node, 1 for its direct children, and so on.
+// Returns the new DAG, the id of the root node in the new graph, and an error.
+func (d *TypedDAG[T]) GetDescendantsGraphByDepth(rootID string, maxDepth int) (*TypedDAG[T], string, error) {
+	inner, newId, err := d.inner.GetDescendantsGraphByDepth(rootID, maxDepth)
+	if err != nil {
+		return nil, "", err
+	}
+	return &TypedDAG[T]{inner: inner}, newId, nil
+}
+
+// GetAncestorsGraphByDepth returns a new TypedDAG consisting of the vertex
+// with leafID and its ancestors, limited to maxDepth levels.
+// Depth starts at 0 for the leaf node, 1 for its direct parents, and so on.
+// Returns the new DAG, the id of the leaf node in the new graph, and an error.
+func (d *TypedDAG[T]) GetAncestorsGraphByDepth(leafID string, maxDepth int) (*TypedDAG[T], string, error) {
+	inner, newId, err := d.inner.GetAncestorsGraphByDepth(leafID, maxDepth)
+	if err != nil {
+		return nil, "", err
+	}
+	return &TypedDAG[T]{inner: inner}, newId, nil
+}
+
+// GetEdges returns a list of all edges in the DAG.
+// The returned edge list shares data with the DAG for better performance.
+// Use GetEdgesWithOption(CopyData) for a safe, independent copy.
+func (d *TypedDAG[T]) GetEdges() EdgeList {
+	return d.inner.GetEdges()
+}
+
+// GetEdgesWithOption returns a list of all edges in the DAG.
+// The option parameter determines whether the data is shared or copied.
+func (d *TypedDAG[T]) GetEdgesWithOption(option CopyOption) EdgeList {
+	return d.inner.GetEdgesWithOption(option)
+}
+
+// GetVerticesList returns a list of all vertices in the DAG.
+// The returned node list shares data with the DAG for better performance.
+// Use GetVerticesListWithOption(CopyData) for a safe, independent copy.
+func (d *TypedDAG[T]) GetVerticesList() NodeList[T] {
+	return d.inner.GetVerticesList()
+}
+
+// GetVerticesListWithOption returns a list of all vertices in the DAG.
+// The option parameter determines whether the data is shared or copied.
+func (d *TypedDAG[T]) GetVerticesListWithOption(option CopyOption) NodeList[T] {
+	return d.inner.GetVerticesListWithOption(option)
+}
