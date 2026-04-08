@@ -73,7 +73,7 @@ func main() {
 	start = time.Now()
 	d.ReduceTransitively()
 	end = time.Now()
-	fmt.Printf("%fs to transitively reduce the graph with caches poupulated\n", end.Sub(start).Seconds())
+	fmt.Printf("%fs to transitively reduce the graph with caches populated\n", end.Sub(start).Seconds())
 	if edgeCountBefore != d.GetSize() {
 		panic(fmt.Sprintf("GetSize() = %d, want %d", d.GetSize(), edgeCountBefore))
 	}
@@ -82,7 +82,7 @@ func main() {
 	start = time.Now()
 	d.ReduceTransitively()
 	end = time.Now()
-	fmt.Printf("%fs to transitively reduce the graph without caches poupulated\n", end.Sub(start).Seconds())
+	fmt.Printf("%fs to transitively reduce the graph without caches populated\n", end.Sub(start).Seconds())
 
 	var childList []string
 	for x := range children {
