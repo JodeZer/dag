@@ -23,8 +23,8 @@ github.com/JodeZer/dag:
 0.143887s to get descendants 2nd time
 0.444065s to get descendants ordered
 0.000008s to get children
-1.301297s to transitively reduce the graph with caches poupulated
-2.723708s to transitively reduce the graph without caches poupulated
+1.301297s to transitively reduce the graph with caches populated
+2.723708s to transitively reduce the graph without caches populated
 0.168572s to delete an edge from the root
 
 
